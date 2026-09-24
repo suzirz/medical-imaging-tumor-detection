@@ -32,18 +32,18 @@ To ensure full transparency, the table below delineates which modules utilize tr
 
 The table below summarizes performance across standard benchmark evaluations on local CPU and Colab T4 GPU:
 
-| Architecture | Type | Parameters | Model Size | Accuracy / Dice | Malignancy Sensitivity (Zero-Miss)* | Inference Latency | Target Hardware | Primary Strength |
+| Architecture | Type | Parameters | Model Size | Held-Out Test / Val Accuracy | Sensitivity / Dice | Inference Latency | Target Hardware | Operational Scope |
 |---|---|---|---|---|---|---|---|---|
-| **Tri-Model Consensus Ensemble** | Soft-Voting Ensemble | **113,892,556** | **~435 MB** | **98.10% Accuracy** *(AUC 0.999)* | **100.0% Sensitivity\*** | ~120 ms (GPU) | Workstation / GPU | Combines compound CNN scaling, self-attention, and dense feature reuse |
-| **LightweightTumorCNN** *(Local Checkpoint)* | 2-Stage ConvNet | **6,273** | **48.7 KB** | **97.22% Accuracy** *(Val Loss: 0.048)* | **100.0% Sensitivity\*** | **< 1 ms (CPU)** | Laptop / Edge CPU | Fast binary screening filter (Normal vs Tumor) for CPU triage |
-| **Vision Transformer (ViT-B/16)** | Self-Attention Transformer | **86,567,684** | **~330 MB** | **96.40% Accuracy** | **98.8% Sensitivity** | ~85 ms (GPU) | Cloud GPU / PACS | 12 attention heads across 196 patch tokens; models contralateral brain dependencies |
-| **DenseNet-121 Classifier** | Dense Feature Reuse CNN | **7,982,980** | **~31 MB** | **96.15% Accuracy** | **98.5% Sensitivity** | ~28 ms (GPU) | Workstation / GPU | Concatenates features across four dense blocks; preserves fine margin detail |
-| **EfficientNet-B4 Classifier** *(Colab Deployed)* | Compound Scaling CNN | **19,341,892** | **74.6 MB** | **95.80% Accuracy** *(93.12% Test Conf)* | **99.2% Sensitivity** | ~35 ms (GPU) | Diagnostic Workstation | Balanced depth, width, and resolution scaling ($d=1.8, w=1.4, r=1.3$) |
-| **Attention U-Net** *(Local Checkpoint)* | Attention Gate U-Net | **31,389,165** | **125.7 MB** | **90.15% Dice** *(BCE-Dice Converged)* | **99.4% Pixel Sensitivity** | ~45 ms (GPU) / ~210 ms (CPU) | Workstation / Local GPU | Four attention gates filter skip connections to isolate exact lesion boundaries |
+| **EfficientNet-B4 Classifier** *(Local Checkpoint)* | Compound Scaling CNN | **19,341,892** | **74.6 MB** | **85.14% Test Acc** *(95.80% Val)* | **85.14% Macro Recall** *(88.17% Prec)* | ~70 ms (CPU) / ~35 ms (GPU) | Diagnostic Workstation | Primary 4-class multi-category classification (Glioma, Meningioma, Pituitary, Normal) |
+| **Attention U-Net** *(Local Checkpoint)* | Attention Gate U-Net | **31,389,165** | **125.7 MB** | **90.15% Dice** *(Test Set)* | **99.4% Pixel Sensitivity** | ~45 ms (GPU) / ~210 ms (CPU) | Workstation / Local GPU | Four attention gates filter skip connections to isolate exact lesion boundaries |
+| **LightweightTumorCNN** *(Local Checkpoint)* | 2-Stage ConvNet | **6,273** | **48.7 KB** | **76.14% Test Acc** *(97.22% Val subset)* | **100.0% Tumor Recall\*** | **~8 ms (CPU)** | Laptop / Edge CPU | Rapid binary screening filter (Normal vs Tumor); flags candidates for secondary review |
+| **Vision Transformer (ViT-B/16)** | Self-Attention Transformer | **86,567,684** | **~330 MB** | **96.40% Accuracy** *(Colab Benchmark)* | **98.8% Sensitivity** | ~85 ms (GPU) | Cloud GPU / PACS | 12 attention heads across 196 patch tokens; models contralateral brain dependencies |
+| **DenseNet-121 Classifier** | Dense Feature Reuse CNN | **7,982,980** | **~31 MB** | **96.15% Accuracy** *(Colab Benchmark)* | **98.5% Sensitivity** | ~28 ms (GPU) | Workstation / GPU | Concatenates features across four dense blocks; preserves fine margin detail |
+| **Tri-Model Consensus Ensemble** | Soft-Voting Ensemble | **113,892,556** | **~435 MB** | **98.10% Ensemble Acc** *(Colab Benchmark)* | **99.5% Macro Sensitivity** | ~120 ms (GPU) | Workstation / GPU | Combines compound CNN scaling, self-attention, and dense feature reuse |
 | **Deep Metric CBMIR & Radiogenomics** | Metric Representation | **~1.2 MB** | **512-dim** | **97.50% Recall@3** | **100.0% Top-3 Recall** | ~15 ms | Case Retrieval | Projects scans to a 512-d manifold to retrieve nearest verified clinical twins |
-| **BrainTumorCustomCNN** | Native PyTorch Multimodal | **~340,000** | **~1.4 MB** | **94.50% Accuracy** | **97.8% Sensitivity** | ~8 ms (CPU/GPU) | Local Workstation | Native 4-channel input for T1, T1ce, T2, and FLAIR |
+| **BrainTumorCustomCNN** | Native PyTorch Multimodal | **~340,000** | **~1.4 MB** | **94.50% Accuracy** *(Colab Benchmark)* | **97.8% Sensitivity** | ~8 ms (CPU/GPU) | Local Workstation | Native 4-channel input for T1, T1ce, T2, and FLAIR |
 
-*\*Note on Zero-Miss Malignancy Sensitivity: Configured as an aggressive triage threshold ($\ge 0.15$ malignancy probability) prioritizing recall over specificity during preliminary screening to flag subtle sub-threshold lesions for mandatory radiologist verification.*
+*\*Note on Lightweight Binary Screening: On the 2,800-scan independent test cohort, LightweightTumorCNN achieves 100.0% tumor recall (zero false negatives across 2,100 tumor scans) by operating as an aggressive preliminary filter. This high sensitivity intentionally trades off specificity (4.57%), requiring all positive flags to undergo secondary evaluation by EfficientNet-B4.*
 
 ![Clinical Reader ROC Curves & 6-Axis Radar Benchmark](assets/clinical_reader_study_roc_radar.png)
 
@@ -283,15 +283,72 @@ python train_local.py --arch custom --epochs 10 --batch_size 16
 
 ---
 
-## In-Silico Clinical Reader Study & SaMD Regulatory Blueprint
+## Empirical Test Cohort Evaluation (2,800 Independent Scans)
 
-* **In-Silico Reader Study Framework ($N=500$ Cohort)**:
-  * **Inter-Observer Modeling**: Fleiss' Generalized Kappa $\kappa = 0.884$ modeling concordance across a simulated panel of five clinicians (two senior neuroradiologists, two general radiologists, and one neurosurgeon).
-  * **AI vs Consensus Calibration**: Cohen's Pairwise Kappa $\kappa = 0.912$ with a $97.2\%$ concordance rate.
-  * **Morphometric Agreement**: Bland-Altman area bias $+0.08\text{ cm}^2$ ($95\%$ Limits of Agreement: $-0.35\text{ to }+0.42\text{ cm}^2$, $p < 0.001$).
-* **Scanner Field Strength & Vendor Stability**:
-  * Tested on 1.5 Tesla (community hospital) and 3.0 Tesla (academic center) scans from Siemens, GE, and Philips. Cross-vendor accuracy variance is $\sigma < 0.35\%$.
-* **Regulatory Compliance Blueprint**: A comprehensive SaMD pre-market blueprint is provided in [`docs/CLINICAL_REGULATORY_SAMD.md`](docs/CLINICAL_REGULATORY_SAMD.md), structuring software lifecycle requirements against **FDA 510(k)** (Product Code QAS), **CE-MDR Rule 11** Class IIa, **IEC 62304** Software Safety Class B, and **ISO 14971** risk controls.
+All metrics below are computed directly against the independent, held-out test cohort (`Dataset/Testing/`, $N=2,800$ scans, strictly balanced at 700 scans per class). The evaluation script is fully reproducible via:
+
+```bash
+python scripts/evaluate_models_on_testset.py
+```
+
+Results are stored in [`evaluation_testset_results.json`](evaluation_testset_results.json).
+
+### 1. EfficientNet-B4 (4-Class Multi-Category Classification)
+
+* **Overall Test Accuracy**: **85.14%** (2,384 / 2,800 scans)
+* **Macro Precision**: **88.17%** | **Macro Recall**: **85.14%** | **Macro F1-Score**: **84.42%**
+* **Average Inference Latency**: **70.28 ms / scan** (Intel CPU)
+
+#### Per-Class Diagnostic Performance:
+
+| Diagnostic Class | Test Samples (Support) | Precision | Recall (Sensitivity) | F1-Score | True Positives | Primary Misclassification Mode |
+|---|---|---|---|---|---|---|
+| **Glioma** | 700 | **98.20%** | 54.43% | **70.04%** | 381 / 700 | 214 predicted as Normal; 104 as Meningioma |
+| **Meningioma** | 700 | **85.28%** | **96.00%** | **90.32%** | 672 / 700 | 14 predicted as Normal; 11 as Pituitary |
+| **Normal Tissue (No Tumor)** | 700 | 71.06% | **98.57%** | **82.59%** | 690 / 700 | 7 predicted as Meningioma; 3 as Glioma |
+| **Pituitary Adenoma** | 700 | **98.16%** | **91.57%** | **94.75%** | 641 / 700 | 53 predicted as Normal; 5 as Meningioma |
+
+#### Complete 4x4 Confusion Matrix:
+
+| Actual \ Predicted | Pred: Glioma | Pred: Meningioma | Pred: Normal | Pred: Pituitary | Total Actual | Class Recall |
+|---|---|---|---|---|---|---|
+| **Actual Glioma** | **381** (TP) | 104 | 214 | 1 | 700 | 54.43% |
+| **Actual Meningioma** | 3 | **672** (TP) | 14 | 11 | 700 | 96.00% |
+| **Actual Normal** | 3 | 7 | **690** (TP) | 0 | 700 | 98.57% |
+| **Actual Pituitary** | 1 | 5 | 53 | **641** (TP) | 700 | 91.57% |
+| **Total Predicted** | 388 | 788 | 971 | 653 | **2,800** | — |
+| **Class Precision** | **98.20%** | **85.28%** | **71.06%** | **98.16%** | — | **85.14%** (Overall Acc) |
+
+#### Empirical Diagnostic Insights:
+1. **Meningioma & Pituitary Saliency**: High F1-scores (**90.32%** and **94.75%**) demonstrate strong feature localization for extra-axial, well-demarcated lesions with distinct anatomical boundaries (sella turcica / dural attachments).
+2. **Normal Tissue Specificity**: With **98.57%** recall (690/700 true negatives), the model rarely misses healthy scans when no lesion is present.
+3. **Glioma Attenuation Mode**: Glioma precision is exceptionally high (**98.20%**, only 7 false positives total), but recall drops to 54.43%. On 2D axial slices without contrast or high-grade necrotic ring enhancement (e.g., lower-grade diffuse infiltration), subtle parenchymal changes can be classified as normal tissue. This highlights the clinical necessity of 3D multi-sequence volumetric acquisition (T1ce + FLAIR) for infiltrative tumors.
+
+---
+
+### 2. LightweightTumorCNN (Edge Binary Screening Filter)
+
+* **Architecture**: 2-stage edge convolutional network (6,273 parameters, 48.7 KB)
+* **Task**: Binary Triage (Normal vs Tumor Candidate)
+* **Overall Test Accuracy**: **76.14%** (2,132 / 2,800 scans)
+* **Inference Latency**: **8.23 ms / scan** (CPU)
+
+| Metric | Empirical Value | Diagnostic Meaning |
+|---|---|---|
+| **Tumor Sensitivity (Recall)** | **100.00%** (2,100 / 2,100) | **Zero False Negatives**: Caught every single tumor scan across all classes |
+| **Normal Specificity** | **4.57%** (32 / 700) | Extremely conservative threshold; 668 normal scans flagged as suspect |
+| **Precision** | **75.87%** (2,100 / 2,768) | Proportion of flagged scans that truly contain pathology |
+| **F1-Score** | **86.28%** | Harmonic mean on binary candidate screening |
+
+#### Honest Engineering Assessment of Edge CNNs:
+The lightweight model's 100% sensitivity is achieved because its compact representation (6,273 parameters) functions as an ultra-conservative screening trigger that errs toward flagging any atypical intensity distribution as suspicious. While this eliminates dangerous false negatives at the edge, its low specificity (4.57% on external test data) means it cannot serve as an autonomous diagnostic tool. It is architected exclusively as an upstream wake-up filter to route positive candidates to the heavier 19.3M-parameter EfficientNet-B4 or Attention U-Net.
+
+---
+
+### 3. Simulation Testbeds vs Regulatory Roadmap
+
+* **In-Silico Reader Study Simulation** (`evaluation/reader_study.py`): Provided as an educational software testbed modeling how Multi-Reader Multi-Case (MRMC) statistical concordance and Cohen/Fleiss Kappa pipelines operate. It is explicitly an in-silico simulation harness and does not claim IRB approval or human clinical trial completion.
+* **SaMD Regulatory Design Blueprint** (`docs/CLINICAL_REGULATORY_SAMD.md`): Structures software lifecycle controls against **IEC 62304** (Class B software safety) and **ISO 14971** (hazard mitigation matrix). This document serves as an engineering blueprint illustrating how medical AI architectures should be structured for regulatory review.
 
 ---
 
