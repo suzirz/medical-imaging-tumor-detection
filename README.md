@@ -1,73 +1,73 @@
-# 🩺 Medical Imaging Tumor Detection Pipeline: BraTS 2023 + EfficientNet-B4
+# Medical Imaging Tumor Detection Pipeline: BraTS 2023 + EfficientNet-B4
 
-Sistem klasifikasi dan deteksi tumor otak multimodal berbasis Deep Learning (**PyTorch + MONAI + EfficientNet-B4 + FastAPI + Grad-CAM++**), diadaptasi dari arsitektur rancangan AWS PartyRock.
+Pipeline klasifikasi dan deteksi tumor otak berbasis PyTorch, MONAI, EfficientNet-B4, FastAPI, dan Grad-CAM++. Diadaptasi dari spesifikasi arsitektur AWS PartyRock.
 
 ---
 
-## 🏗️ Arsitektur & Spesifikasi Pipeline
+## Spesifikasi Pipeline
 
 | Komponen | Spesifikasi Teknis |
 |---|---|
-| **Modalitas Input** | 4-Channel MRI Multimodal: `T1`, `T1ce`, `T2`, `FLAIR` (.nii.gz) |
-| **Target Klasifikasi** | 4 Kelas: `0: Normal` · `1: Glioma` · `2: Meningioma` · `3: Tumor Hipofisis` |
-| **Backbone Model** | `EfficientNet-B4` (modifikasi input 4-channel) + Squeeze-and-Excitation (SE) Attention |
-| **Loss Function** | `MultiClassFocalLoss` ($\gamma=2.0, \alpha=[0.25, 0.25, 0.25, 0.25]$) |
-| **Strategi Pelatihan** | Transfer Learning 2-Fase (Fase 1: Frozen Backbone $\rightarrow$ Fase 2: Full Fine-Tuning) |
-| **Explainable AI (XAI)** | `Grad-CAM++` dengan pemetaan rekomendasi klinis otomatis |
-| **Deployment** | Backend REST API `FastAPI`, `Docker`, dan `docker-compose` (GPU passthrough) |
+| Modalitas Input | 4-Channel MRI Multimodal: T1, T1ce, T2, FLAIR (.nii.gz) |
+| Target Klasifikasi | 4 Kelas: Normal (0), Glioma (1), Meningioma (2), Tumor Hipofisis (3) |
+| Backbone Model | EfficientNet-B4 (input 4-channel) + Squeeze-and-Excitation Attention |
+| Fungsi Loss | MultiClassFocalLoss ($\gamma=2.0, \alpha=[0.25, 0.25, 0.25, 0.25]$) |
+| Pelatihan | Transfer Learning 2-Fase: Fase 1 (Head Only), Fase 2 (Full Fine-Tuning) |
+| Explainability (XAI) | Grad-CAM++ dan pemetaan rekomendasi klinis otomatis |
+| Deployment | REST API FastAPI, Docker multi-stage, docker-compose GPU |
 
 ---
 
-## 📁 Struktur Direktori
+## Struktur Direktori
 
 ```text
 ├── api/
-│   └── main.py                     # Layanan REST API FastAPI (/predict, /health)
+│   └── main.py                             # Endpoint REST API (/predict, /health)
 ├── docs/
-│   └── troubleshooting_and_optimization.md # Panduan troubleshooting & optimasi GPU
+│   └── troubleshooting_and_optimization.md # Catatan teknis & penanganan error
 ├── models/
-│   └── efficientnet_tumor_classifier.py    # EfficientNet-B4 4-ch + SE Block + Focal Loss
+│   └── efficientnet_tumor_classifier.py    # EfficientNet-B4 4-ch, SE Block, Focal Loss
 ├── preprocessing/
-│   └── brats_preprocessor.py       # Pemuatan NIfTI, Z-score, N4 bias, slice 60% aksial
+│   └── brats_preprocessor.py               # Loader NIfTI, Z-score, N4 bias, ekstraksi aksial
 ├── training/
-│   └── trainer.py                  # Loop pelatihan 2-fase PyTorch (AdamW + Cosine Annealing)
+│   └── trainer.py                          # Training loop 2-fase PyTorch
 ├── evaluation/
-│   └── gradcam_visualizer.py       # Generator Heatmap Grad-CAM++ & Action Map Klinis
-├── app.py                          # UI Web Interaktif (Streamlit)
-├── requirements.txt                # Dependensi versi terpinned (PyTorch, MONAI, timm, dll)
-├── Dockerfile                      # Multi-stage Docker build
-├── docker-compose.yml              # GPU-enabled container orchestration
-└── CHAT.md                         # Memori riwayat proyek
+│   └── gradcam_visualizer.py               # Visualisasi Grad-CAM++ & action map klinis
+├── app.py                                  # Web demo interaktif (Streamlit)
+├── requirements.txt                        # Versi pustaka teruji
+├── Dockerfile                              # Build container multi-stage
+├── docker-compose.yml                      # Orkestrasi container dengan GPU passthrough
+└── CHAT.md                                 # Log dan konteks proyek
 ```
 
 ---
 
-## 🚀 Panduan Menjalankan
+## Panduan Menjalankan
 
-### 1. Instalasi Dependensi
+### 1. Pasang Dependensi
 ```bash
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### 2. Melatih Model (Dua Fase)
+### 2. Latih Model (Dua Fase)
 ```bash
 python -m training.trainer
 ```
 
-### 3. Menjalankan REST API FastAPI (Produksi)
+### 3. Jalankan REST API FastAPI
 ```bash
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-Buka dokumentasi Swagger interaktif di: `http://localhost:8000/docs`.
+Akses dokumentasi Swagger interaktif di: `http://localhost:8000/docs`.
 
-### 4. Menjalankan Antarmuka Web Interaktif (Streamlit)
+### 4. Jalankan Web Demo (Streamlit)
 ```bash
 streamlit run app.py
 ```
 
-### 5. Deployment Menggunakan Docker
+### 5. Jalankan dengan Docker
 ```bash
 docker-compose up --build
 ```
