@@ -25,3 +25,10 @@ Thumbs.db
 CHAT.md
 docs/
 
+# Large Datasets & Archives
+data/
+Dataset/
+*.zip
+*.tar.gz
+
+

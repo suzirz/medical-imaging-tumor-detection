@@ -16,6 +16,10 @@ The repository implements three specialized neural network architectures tailore
 
 ---
 
+### Neural Network Architecture Diagram
+
+![Neural Network Architecture](assets/neural_network_architecture.png)
+
 ### 1. LightweightTumorCNN (Fast 2-Pool Architecture)
 Designed for fast local training and deployment on standard laptop CPUs without dedicated GPU hardware:
 * **Zero Padding**: $(2, 2)$ padding to preserve edge features.
@@ -92,6 +96,8 @@ For large 3D volumetric datasets (BraTS 2023):
 ---
 
 ## Benchmark Results
+
+![Training Loss and Accuracy Curves](assets/training_metrics.png)
 
 Evaluation across benchmark test sets:
 
