@@ -15,6 +15,7 @@ from models.advanced_classifier import AdvancedTumorClassifier
 from preprocessing.contour_cropper import crop_brain_contour, preprocess_mri_240
 from evaluation.gradcam_visualizer import GradCAMVisualizer
 from evaluation.report_generator import generate_clinical_report
+from evaluation.lesion_analyzer import LesionMorphometryAnalyzer
 
 st.set_page_config(
     page_title="NeuroScan AI — Brain Tumor Detection & Diagnostic Pipeline",
@@ -524,6 +525,11 @@ with tabs[0]:
                     cropped_tissue = crop_brain_contour(np.array(eval_img))
                     active_engine_name = "BrainTumorCustomCNN"
 
+                # Compute Quantitative Lesion Morphometry & Digital Calipers
+                analyzer = LesionMorphometryAnalyzer(mm_per_px=0.47)
+                morph = analyzer.analyze(np.array(eval_img), heatmap, is_tumor=is_tumor)
+                caliper_img = morph["caliper_overlay"]
+
                 # Record in Session Diagnostic History
                 st.session_state.diagnostic_history.insert(0, {
                     "timestamp": datetime.now().strftime("%H:%M:%S"),
@@ -534,19 +540,35 @@ with tabs[0]:
                     "action": protocol
                 })
 
-            # Visual Evidence Row: Preprocessed Contour vs Grad-CAM++ Localization
-            st.markdown("#### Spatial Explainability & Localization")
-            vcol1, vcol2 = st.columns(2)
+            # Quantitative Morphometry Metric Cards
+            st.markdown("#### Quantitative Lesion Morphometry & Caliper Analysis")
+            mcol1, mcol2, mcol3, mcol4 = st.columns(4)
+            if morph["has_lesion"]:
+                mcol1.metric("Longest Diameter (Major)", f"{morph['major_mm']:.1f} mm")
+                mcol2.metric("Perpendicular Width (Minor)", f"{morph['minor_mm']:.1f} mm")
+                mcol3.metric("Cross-Sectional Area", f"{morph['area_cm2']:.2f} cm²", delta=f"{morph['tumor_burden_pct']:.1f}% Brain Burden", delta_color="inverse")
+                mcol4.metric("Anatomical Localization", morph["anatomical_location"])
+            else:
+                mcol1.metric("Longest Diameter (Major)", "0.0 mm")
+                mcol2.metric("Perpendicular Width (Minor)", "0.0 mm")
+                mcol3.metric("Cross-Sectional Area", "0.00 cm²")
+                mcol4.metric("Anatomical Localization", "Bilateral Symmetrical")
+
+            # Visual Evidence Row: Preprocessed Contour vs Grad-CAM++ vs PACS Calipers
+            st.markdown("#### Spatial Explainability & Caliper Localization")
+            vcol1, vcol2, vcol3 = st.columns(3)
             with vcol1:
-                st.image(cropped_tissue, caption="Brain Contour Crop (Tissue Isolation)", width='stretch')
+                st.image(cropped_tissue, caption="1. Brain Contour Crop (Tissue Isolation)", width='stretch')
             with vcol2:
-                st.image(overlay, caption="Grad-CAM++ Activation Heatmap Overlay", width='stretch')
+                st.image(overlay, caption="2. Grad-CAM++ Saliency Heatmap", width='stretch')
+            with vcol3:
+                st.image(caliper_img, caption="3. Digital PACS Calipers (Measurement)", width='stretch')
 
             # ================= EXPORT CLINICAL REPORT SECTION =================
             st.markdown("#### Clinical Documentation & Export")
             scan_slug = re.sub(r'[^a-zA-Z0-9_-]', '_', filename)
 
-            # Generate in-memory PDF and PNG
+            # Generate in-memory PDF and PNG with 4-panel evidence and morphometry
             pdf_bytes = generate_clinical_report(
                 scan_id=filename,
                 original_img=np.array(eval_img),
@@ -556,6 +578,8 @@ with tabs[0]:
                 confidence=confidence,
                 engine_name=active_engine_name,
                 clinical_protocol=protocol,
+                caliper_img=caliper_img,
+                morphometry=morph,
                 file_format="pdf"
             )
 
@@ -568,6 +592,8 @@ with tabs[0]:
                 confidence=confidence,
                 engine_name=active_engine_name,
                 clinical_protocol=protocol,
+                caliper_img=caliper_img,
+                morphometry=morph,
                 file_format="png"
             )
 
