@@ -11,6 +11,10 @@ from ui import (
     render_segmentation_tab,
     render_vlm_tab,
     render_retrieval_tab,
+    render_synthesis_tab,
+    render_prognosis_tab,
+    render_dicom_tab,
+    render_surgery_tab,
     render_contour_tab,
     render_registry_tab
 )
@@ -48,6 +52,10 @@ tabs = st.tabs([
     "Deep Semantic Segmentation (Attention U-Net)",
     "Vision-Language Copilot & Interactive VQA",
     "Case-Based Retrieval & Radiogenomics (CBMIR)",
+    "Virtual Contrast Synthesis (T1ce / FLAIR)",
+    "DeepSurv Patient Survival Prognostication",
+    "Native DICOM PACS & Window-Leveling",
+    "Neurosurgical Resection Planner",
     "Contour Cropping & Skull Stripping",
     "Neural Architecture & Benchmark Registry"
 ])
@@ -68,12 +76,26 @@ with tabs[2]:
 with tabs[3]:
     render_retrieval_tab(eval_img, filename)
 
-# Tab 5: Contour Cropping & Morphological Skull Stripping Pipeline
+# Tab 5: Virtual Contrast Synthesis & Cross-Modality Translation (Generative MRI Physics)
 with tabs[4]:
+    render_synthesis_tab(eval_img, filename)
+
+# Tab 6: DeepSurv: Patient Survival Trajectory & Kaplan-Meier Curve
+with tabs[5]:
+    render_prognosis_tab(filename)
+
+# Tab 7: Native DICOM Medical PACS Ingestion & Radiologist Window-Level Presets
+with tabs[6]:
+    render_dicom_tab()
+
+# Tab 8: Neurosurgical Resection Planner & Safe Corridor Guidance
+with tabs[7]:
+    render_surgery_tab(eval_img, filename)
+
+# Tab 9: Contour Cropping & Morphological Skull Stripping Pipeline
+with tabs[8]:
     render_contour_tab(eval_img)
 
-# Tab 6: Neural Architecture & Multi-Model Benchmark Registry
-with tabs[5]:
+# Tab 10: Neural Architecture & Multi-Model Benchmark Registry
+with tabs[9]:
     render_registry_tab()
-
-

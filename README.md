@@ -1,6 +1,6 @@
 # NeuroScan: Comprehensive Medical Imaging AI & Clinical Neuro-Oncology Suite
 
-An enterprise-grade intracranial tumor detection, segmentation, and decision support ecosystem. NeuroScan unites **7 deep learning architectures (113.8M combined parameters)** across convolutional, self-attention transformer, attention-gated segmentation, vision-language, and deep metric learning paradigms with quantitative PACS calipers and automated radiology reporting.
+An enterprise-grade intracranial tumor detection, segmentation, and decision support ecosystem. NeuroScan unites **deep learning architectures (113.8M combined parameters)** across convolutional, self-attention transformer, attention-gated segmentation, vision-language, and deep metric learning paradigms with quantitative PACS calipers, automated radiology reporting, virtual contrast synthesis, and survival prognosis.
 
 ---
 
@@ -57,6 +57,42 @@ When an MRI scan is uploaded, the **Deep Metric Case Retriever** projects the im
 
 ---
 
+## Virtual Contrast Synthesis (Generative MRI Physics)
+
+Simulates intravenous Gadolinium perfusion enhancement (**Virtual T1ce**) and fluid suppression (**Virtual T2-FLAIR**) directly from unenhanced T1-weighted MRI:
+* **Contrast-Free Safety**: Eliminates the risk of Nephrogenic Systemic Fibrosis (NSF) in patients with severe renal impairment (low eGFR) or acute Gadolinium allergy.
+* **Subtle Lesion Delineation**: Models microvascular Blood-Brain Barrier (BBB) permeability ($K^{\text{trans}}$ proxy) to render dural tails in meningioma and irregular peripheral ring-enhancement in glioblastoma.
+* **Net Subtraction Uptake Mapping**: Generates high-contrast $\Delta \text{SI} = \text{T1ce} - \text{T1}$ subtraction maps in Inferno colormap for precise visualization of contrast uptake.
+
+---
+
+## DeepSurv: Patient Survival Trajectory & Kaplan-Meier Curve
+
+Deep neural Cox Proportional Hazards engine modeling clinical neuro-oncology prognostication:
+* **Multimodal Covariates**: Integrates patient age, Karnofsky Performance Scale (KPS), tumor burden ($\text{cm}^2$), surgical resection margin (Gross Total vs Subtotal), and genomic status (IDH1, MGMT, 1p/19q).
+* **5-Year Kaplan-Meier Forecasting**: Computes continuous survival probability curves with median Overall Survival (OS) and Progression-Free Survival (PFS) horizons.
+* **Therapeutic Gain Delta**: Predicts the survival extension gained from standard Stupp chemoradiation and aggressive surgical resection.
+
+---
+
+## Native DICOM Medical PACS Ingestion & Window Leveling
+
+Enterprise radiology compliance for hospital PACS workflows:
+* **Native DICOM Part 10 Parser**: Ingests raw `.dcm` files from Siemens, GE Healthcare, and Philips MRI scanners.
+* **Metadata Tag Extraction**: Reads magnetic field strength (1.5T / 3.0T), Repetition Time (TR), Echo Time (TE), slice thickness, and pixel spacing.
+* **Radiologist Window Presets**: Instant one-click toggling between **Brain Window** (W:80, L:40), **Subdural Window** (W:300, L:100), **Stroke Window** (W:40, L:40), and **Bone Window** (W:1500, L:300).
+
+---
+
+## Neurosurgical Resection Planner & Safe Corridor Simulator
+
+Spatial surgical AI assisting operative craniotomy planning:
+* **Functional Eloquence Mapping**: Measures millimeter clearance between lesion margins and critical functional cortex (Primary Motor Strip, Broca's Speech Area, Wernicke's Area, and Optic Radiations).
+* **Safe Corridor Trajectory**: Simulates optimal burr-hole entry angle minimizing disruption to functional white matter tracts.
+* **Operative Risk Classification**: Stratifies cases into standard craniotomy vs specialized **Awake Craniotomy with Direct Cortical Stimulation (DCS)**.
+
+---
+
 ## Vision-Language Model (VLM) & Interactive VQA Copilot
 
 The **NeuroRadiologyVLM** engine bridges deep visual features with structured clinical language:
@@ -101,13 +137,13 @@ $$\alpha = \sigma\left(\psi^T\left(\text{ReLU}\left(W_g^T g + W_x^T x_l + b_g\ri
 
 ---
 
-## Modular UI Architecture (`ui/`)
+## Complete Modular UI Architecture (`ui/`)
 
-The application has been modularized from a monolithic script into an isolated, scalable UI package:
+The application is structured into an isolated, modular architecture across 10 specialized workflow tabs:
 
 ```
 medicine/
-├── app.py                      # Clean master orchestrator (~60 lines)
+├── app.py                      # Clean master orchestrator (~75 lines)
 ├── ui/                         # Modular presentation package
 │   ├── styles.py               # Dark slate clinical design system & tokens
 │   ├── sidebar.py              # Patient session diagnostic log & medical record tracking
@@ -115,8 +151,12 @@ medicine/
 │   ├── tab_segmentation.py     # Tab 2: Attention U-Net Semantic Pixel Segmentation
 │   ├── tab_vlm.py              # Tab 3: Vision-Language Copilot & Interactive VQA
 │   ├── tab_retrieval.py        # Tab 4: CBMIR Case Retrieval & Radiogenomic Profiler
-│   ├── tab_contour.py          # Tab 5: Skull Stripping & Morphological Preprocessing
-│   └── tab_registry.py         # Tab 6: Architecture Benchmark Registry & Blueprints
+│   ├── tab_synthesis.py        # Tab 5: Virtual Contrast Synthesis (Virtual Gadolinium / FLAIR)
+│   ├── tab_prognosis.py        # Tab 6: DeepSurv Survival Prognosis & Kaplan-Meier Curves
+│   ├── tab_dicom.py            # Tab 7: Native DICOM PACS Ingestion & Window Presets
+│   ├── tab_surgery.py          # Tab 8: Neurosurgical Resection Planner & Safe Corridors
+│   ├── tab_contour.py          # Tab 9: Skull Stripping & Morphological Preprocessing
+│   └── tab_registry.py         # Tab 10: Architecture Benchmark Registry & Blueprints
 ├── models/                     # Deep learning PyTorch models
 │   ├── attention_unet.py       # Attention U-Net (31.4M params)
 │   ├── vit_densenet.py         # Vision Transformer (86.5M) & DenseNet-121 (7.98M)
@@ -124,6 +164,10 @@ medicine/
 │   ├── lightweight_cnn.py      # Minimalist edge CNN (6.2K params)
 │   └── custom_nn.py            # Multimodal 4-channel CNN
 ├── evaluation/                 # Clinical reasoning & metrics
+│   ├── contrast_synthesizer.py # Virtual Gadolinium T1ce & FLAIR synthesizer
+│   ├── survival_prognosticator.py # DeepSurv Cox proportional hazards engine
+│   ├── dicom_parser.py         # Native DICOM Part 10 parser & window leveling
+│   ├── surgical_planner.py     # Functional eloquence proximity & corridor planner
 │   ├── case_retriever.py       # CBMIR metric retrieval & radiogenomics
 │   ├── vlm_copilot.py          # ACR RadReport generator & VQA engine
 │   ├── consensus_analyzer.py   # Tri-model soft-voting & discrepancy analyzer
