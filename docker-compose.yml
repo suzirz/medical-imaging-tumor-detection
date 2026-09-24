@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  medical-tumor-api:
+    build: .
+    container_name: medical_tumor_detection_service
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./models_checkpoint:/app/models_checkpoint
+    # Passthrough GPU jika NVIDIA Container Toolkit terpasang
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
