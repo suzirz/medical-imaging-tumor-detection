@@ -77,6 +77,16 @@ Clinical decision arbitration engine executing parallel inference across three c
 * **Dissenting Architecture Identification**: Pinpoints specific divergent predictions between Convolutional and Transformer features, automatically issuing an urgent senior neuroradiologist second-opinion directive when divergence is detected.
 * **Total Combined Capacity**: $113.8\text{M}$ parameters ($~435\text{ MB}$).
 
+### 8. Attention U-Net: Pixel-Level Semantic Segmentation with Attention Gates
+Biomedical segmentation architecture for millimeter-precise tumor contour delineation:
+* **Encoder-Decoder Backbone**: 4 contracting downsampling stages ($64 \rightarrow 128 \rightarrow 256 \rightarrow 512 \rightarrow 1024$) paired with 4 expansive upsampling stages via transposed convolutions.
+* **Attention Gates (AGs)**: Oktay et al. (2018) gating mechanism filtering skip connections:
+  $$\alpha = \sigma\left(\psi^T\left(\text{ReLU}\left(W_g^T g + W_x^T x_l + b_g\right)\right) + b_\psi\right)$$
+  Suppresses non-lesion calvarial and parenchymal noise while preserving sharp neoplastic boundary gradients.
+* **Loss Objective**: Hybrid Binary Cross-Entropy and Soft Dice Loss ($\mathcal{L}_{\text{BCE-Dice}} = 0.5 \mathcal{L}_{\text{BCE}} + 0.5 (1 - \text{Dice})$) for robust handling of class imbalance between tumor pixels and background brain parenchyma.
+* **Morphometric Extraction**: Automated computation of predicted lesion surface area ($\text{cm}^2$), outer perimeter ($\text{mm}$), centroid coordinates, and circular compactness/sphericity index ($\frac{4 \pi \cdot \text{Area}}{\text{Perimeter}^2}$).
+* **Parameter Scale**: $31.4\text{M}$ parameters ($~120\text{ MB}$).
+
 ---
 
 ## Preprocessing: Skull Stripping via Extreme Contour Extraction
