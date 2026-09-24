@@ -18,3 +18,7 @@ streamlit>=1.28.0
 tqdm>=4.66.1
 onnx>=1.15.0
 onnxruntime>=1.16.3
+pydicom>=2.4.0
+scipy>=1.11.0
+Pillow>=10.0.0
+
