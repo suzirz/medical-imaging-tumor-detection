@@ -580,6 +580,21 @@ def render_workstation_tab(eval_img: Image.Image = None, filename: str = None):
                     "action": protocol
                 })
 
+                # Persist full analysis context for Vision-Language Copilot & VQA
+                pathology_clean = pred_label.replace("POSITIVE: ", "").replace("NEGATIVE: ", "").replace("NEGATIVE FOR INTRACRANIAL LESION", "Normal Tissue").strip()
+                st.session_state.last_analysis = {
+                    "scan_id": filename,
+                    "pathology": pathology_clean,
+                    "confidence": confidence,
+                    "confidence_str": f"{confidence * 100:.2f}%",
+                    "engine": active_engine_name,
+                    "is_tumor": is_tumor,
+                    "morphometry": morph,
+                    "protocol": protocol,
+                    "consensus_data": consensus_res if "Consensus" in chosen_net else None
+                }
+
+
             # Quantitative Morphometry Metric Cards
             st.markdown("#### Quantitative Lesion Morphometry & Caliper Analysis")
             mcol1, mcol2, mcol3, mcol4 = st.columns(4)

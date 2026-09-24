@@ -9,6 +9,7 @@ from ui import (
     render_patient_sidebar,
     render_workstation_tab,
     render_segmentation_tab,
+    render_vlm_tab,
     render_contour_tab,
     render_registry_tab
 )
@@ -44,6 +45,7 @@ st.markdown("""
 tabs = st.tabs([
     "Clinical Diagnostic Workstation",
     "Deep Semantic Segmentation (Attention U-Net)",
+    "Vision-Language Copilot & Interactive VQA",
     "Contour Cropping & Skull Stripping",
     "Neural Architecture & Benchmark Registry"
 ])
@@ -56,10 +58,15 @@ with tabs[0]:
 with tabs[1]:
     render_segmentation_tab(eval_img, filename)
 
-# Tab 3: Contour Cropping & Morphological Skull Stripping Pipeline
+# Tab 3: Vision-Language Copilot & Interactive VQA (ACR RadReport & Q&A)
 with tabs[2]:
+    render_vlm_tab(eval_img, filename)
+
+# Tab 4: Contour Cropping & Morphological Skull Stripping Pipeline
+with tabs[3]:
     render_contour_tab(eval_img)
 
-# Tab 4: Neural Architecture & Multi-Model Benchmark Registry
-with tabs[3]:
+# Tab 5: Neural Architecture & Multi-Model Benchmark Registry
+with tabs[4]:
     render_registry_tab()
+
