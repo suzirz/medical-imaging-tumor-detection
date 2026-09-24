@@ -1,4 +1,6 @@
 import os
+import re
+from datetime import datetime
 import streamlit as st
 from PIL import Image
 import numpy as np
@@ -11,13 +13,18 @@ from models.custom_nn import BrainTumorCustomCNN
 from models.efficientnet_tumor_classifier import BrainTumorClassifier
 from preprocessing.contour_cropper import crop_brain_contour, preprocess_mri_240
 from evaluation.gradcam_visualizer import GradCAMVisualizer
+from evaluation.report_generator import generate_clinical_report
 
 st.set_page_config(
     page_title="NeuroScan AI — Brain Tumor Detection & Diagnostic Pipeline",
     page_icon="MRI",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
+
+# Initialize Session State for Diagnostic History
+if "diagnostic_history" not in st.session_state:
+    st.session_state.diagnostic_history = []
 
 # Custom High-End Clinical Workstation Theme
 st.markdown("""
@@ -36,9 +43,15 @@ st.markdown("""
 
     /* Main Container Padding */
     .block-container {
-        padding-top: 2rem;
+        padding-top: 1.5rem;
         padding-bottom: 3rem;
         max-width: 1400px;
+    }
+
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: #0b0f1a;
+        border-right: 1px solid #1e293b;
     }
 
     /* Header Styling */
@@ -86,9 +99,11 @@ st.markdown("""
         font-family: 'JetBrains Mono', monospace;
         background: #1e293b;
         color: #94a3b8;
-        padding: 2px 6px;
+        padding: 3px 8px;
         border-radius: 4px;
         font-size: 0.8rem;
+        display: inline-block;
+        margin-top: 4px;
     }
 
     /* Result Banners */
@@ -119,6 +134,33 @@ st.markdown("""
         font-size: 0.85rem;
         color: #cbd5e1;
         margin: 0;
+    }
+
+    /* History Table Items */
+    .history-card {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 6px;
+        padding: 0.75rem;
+        margin-bottom: 0.6rem;
+    }
+    .badge-pos {
+        color: #f87171;
+        background: rgba(239, 68, 68, 0.15);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .badge-neg {
+        color: #34d399;
+        background: rgba(16, 185, 129, 0.15);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        font-family: 'JetBrains Mono', monospace;
     }
 
     /* Tabs Styling */
@@ -181,7 +223,36 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Application Header
+# ================= SIDEBAR: SESSION DIAGNOSTIC LOG =================
+with st.sidebar:
+    st.markdown("### Patient Diagnostic Log")
+    st.caption("Active session rekam medis records")
+
+    history_count = len(st.session_state.diagnostic_history)
+    st.markdown(f"**Total Evaluated Scans:** `{history_count}`")
+
+    if history_count == 0:
+        st.info("Belum ada scan yang dianalisis dalam sesi ini. Upload citra MRI di workstation utama untuk memulai.")
+    else:
+        for idx, item in enumerate(st.session_state.diagnostic_history[:8]):
+            badge_class = "badge-pos" if item["finding"] == "POSITIVE" else "badge-neg"
+            st.markdown(f"""
+            <div class="history-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span style="font-size: 0.8rem; font-weight: 600; color: #f8fafc;">{item['scan_id'][:16]}</span>
+                    <span class="{badge_class}">{item['finding']}</span>
+                </div>
+                <div style="font-size: 0.75rem; color: #94a3b8; font-family: 'JetBrains Mono', monospace;">
+                    {item['timestamp']} · {item['confidence']} · {item['engine']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        if st.button("Clear Session History", use_container_width=True):
+            st.session_state.diagnostic_history = []
+            st.rerun()
+
+# ================= MAIN APPLICATION HEADER =================
 st.markdown("""
 <div class="clinical-header">
     <div class="header-badge">Clinical Decision Support System · Diagnostic Pipeline</div>
@@ -193,7 +264,7 @@ st.markdown("""
 tabs = st.tabs([
     "Clinical Diagnostic Workstation",
     "Contour Cropping & Skull Stripping",
-    "Neural Architecture & Parameter Registry"
+    "Neural Architecture & Benchmark Registry"
 ])
 
 # Default MRI base canvas for fallback
@@ -219,7 +290,6 @@ with tabs[0]:
             eval_img = Image.open(test_file).convert("RGB")
             filename = test_file.name
         else:
-            # Load default sample from Dataset if available
             sample_candidate = "Dataset/Testing/meningioma/Te-aug-me_2.jpg"
             if os.path.exists(sample_candidate):
                 eval_img = Image.open(sample_candidate).convert("RGB")
@@ -276,6 +346,13 @@ with tabs[0]:
                     prob_normal = 1.0 - prob_tumor
                     is_tumor = prob_tumor >= 0.5
                     confidence = prob_tumor if is_tumor else prob_normal
+                    pred_label = "POSITIVE FOR INTRACRANIAL LESION" if is_tumor else "NEGATIVE FOR INTRACRANIAL LESION"
+
+                    protocol = (
+                        "Abnormal mass signature detected. Urgent neurosurgical oncology consultation and multi-sequence contrast MRI recommended."
+                        if is_tumor else
+                        "No structural mass lesion observed. Follow routine clinical surveillance as indicated."
+                    )
 
                     # Diagnostic Banner
                     if is_tumor:
@@ -286,7 +363,7 @@ with tabs[0]:
                             <div class="conf-bar-wrap">
                                 <div class="conf-bar-fill-tumor" style="width: {prob_tumor * 100:.1f}%;"></div>
                             </div>
-                            <p class="banner-desc" style="color: #94a3b8; font-size: 0.8rem;">Clinical Protocol: Abnormal mass signal detected. Urgent correlation with contrast-enhanced multi-sequence MRI and neurosurgical oncology consultation advised.</p>
+                            <p class="banner-desc" style="color: #94a3b8; font-size: 0.8rem;">Clinical Protocol: {protocol}</p>
                         </div>
                         """, unsafe_allow_html=True)
                     else:
@@ -297,14 +374,14 @@ with tabs[0]:
                             <div class="conf-bar-wrap">
                                 <div class="conf-bar-fill-normal" style="width: {prob_normal * 100:.1f}%;"></div>
                             </div>
-                            <p class="banner-desc" style="color: #94a3b8; font-size: 0.8rem;">Clinical Protocol: No structural mass lesion observed. Follow routine surveillance protocol as clinically indicated.</p>
+                            <p class="banner-desc" style="color: #94a3b8; font-size: 0.8rem;">Clinical Protocol: {protocol}</p>
                         </div>
                         """, unsafe_allow_html=True)
 
-                    # Real Grad-CAM++ Attribution
                     vis = GradCAMVisualizer(net)
                     heatmap = vis.generate_heatmap(tensor_in)
                     overlay = vis.overlay_on_mri(np.array(eval_img), heatmap, alpha=0.6, threshold=0.15)
+                    cropped_tissue = crop_brain_contour(np.array(eval_img))
 
                 else:
                     # 4-class inference
@@ -331,8 +408,18 @@ with tabs[0]:
                     classes = ["Normal Tissue", "Glioma", "Meningioma", "Pituitary Adenoma"]
                     p_idx = int(np.argmax(probs))
                     confidence = float(probs[p_idx])
+                    is_tumor = p_idx != 0
+                    pred_label = f"POSITIVE: {classes[p_idx].upper()}" if is_tumor else f"NEGATIVE: {classes[p_idx].upper()}"
 
-                    if p_idx == 0:
+                    protocol_dict = {
+                        0: "No abnormal mass effect identified. Routine surveillance indicated.",
+                        1: "Intraparenchymal infiltration characteristic of Glioma. Neurosurgical oncology consultation advised.",
+                        2: "Extra-axial dural attachment characteristic of Meningioma. Neuro-oncology review and surgical assessment advised.",
+                        3: "Sellar / suprasellar mass characteristic of Pituitary Adenoma. Comprehensive endocrinology panel required."
+                    }
+                    protocol = protocol_dict.get(p_idx, "Medical specialist review required.")
+
+                    if not is_tumor:
                         st.markdown(f"""
                         <div class="banner-normal">
                             <div class="banner-title" style="color: #34d399;">NEGATIVE FOR INTRACRANIAL LESION ({classes[p_idx]})</div>
@@ -344,21 +431,79 @@ with tabs[0]:
                         <div class="banner-tumor">
                             <div class="banner-title" style="color: #f87171;">POSITIVE: {classes[p_idx].upper()} DETECTED</div>
                             <p class="banner-desc">Classification confidence: <strong>{confidence * 100:.2f}%</strong></p>
+                            <p class="banner-desc" style="color: #94a3b8; font-size: 0.8rem;">Clinical Protocol: {protocol}</p>
                         </div>
                         """, unsafe_allow_html=True)
 
                     vis = GradCAMVisualizer(net)
                     heatmap = vis.generate_heatmap(tensor_in, target_class=p_idx)
                     overlay = vis.overlay_on_mri(cv2.resize(np.array(eval_img), (380, 380)), heatmap, alpha=0.6, threshold=0.15)
+                    cropped_tissue = crop_brain_contour(np.array(eval_img))
+
+                # Record in Session Diagnostic History
+                st.session_state.diagnostic_history.insert(0, {
+                    "timestamp": datetime.now().strftime("%H:%M:%S"),
+                    "scan_id": filename,
+                    "engine": "LightweightCNN" if "Lightweight" in chosen_net else "CustomCNN-4Class",
+                    "finding": "POSITIVE" if is_tumor else "NEGATIVE",
+                    "confidence": f"{confidence * 100:.2f}%",
+                    "action": protocol
+                })
 
             # Visual Evidence Row: Preprocessed Contour vs Grad-CAM++ Localization
             st.markdown("#### Spatial Explainability & Localization")
             vcol1, vcol2 = st.columns(2)
             with vcol1:
-                cropped = crop_brain_contour(np.array(eval_img))
-                st.image(cropped, caption="Brain Contour Crop (Tissue Isolation)", width='stretch')
+                st.image(cropped_tissue, caption="Brain Contour Crop (Tissue Isolation)", width='stretch')
             with vcol2:
                 st.image(overlay, caption="Grad-CAM++ Activation Heatmap Overlay", width='stretch')
+
+            # ================= EXPORT CLINICAL REPORT SECTION =================
+            st.markdown("#### Clinical Documentation & Export")
+            scan_slug = re.sub(r'[^a-zA-Z0-9_-]', '_', filename)
+
+            # Generate in-memory PDF and PNG
+            pdf_bytes = generate_clinical_report(
+                scan_id=filename,
+                original_img=np.array(eval_img),
+                cropped_img=cropped_tissue,
+                gradcam_img=overlay,
+                prediction_label=pred_label,
+                confidence=confidence,
+                engine_name="LightweightTumorCNN" if "Lightweight" in chosen_net else "BrainTumorCustomCNN",
+                clinical_protocol=protocol,
+                file_format="pdf"
+            )
+
+            png_bytes = generate_clinical_report(
+                scan_id=filename,
+                original_img=np.array(eval_img),
+                cropped_img=cropped_tissue,
+                gradcam_img=overlay,
+                prediction_label=pred_label,
+                confidence=confidence,
+                engine_name="LightweightTumorCNN" if "Lightweight" in chosen_net else "BrainTumorCustomCNN",
+                clinical_protocol=protocol,
+                file_format="png"
+            )
+
+            dcol1, dcol2 = st.columns(2)
+            with dcol1:
+                st.download_button(
+                    label="Download Formal Clinical Diagnostic Report (PDF)",
+                    data=pdf_bytes,
+                    file_name=f"neuroscan_report_{scan_slug}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            with dcol2:
+                st.download_button(
+                    label="Download High-Resolution Diagnostic Panel (PNG)",
+                    data=png_bytes,
+                    file_name=f"neuroscan_panel_{scan_slug}.png",
+                    mime="image/png",
+                    use_container_width=True
+                )
 
 # ================= TAB 2: CONTOUR CROPPING & SKULL STRIPPING =================
 with tabs[1]:
@@ -389,12 +534,25 @@ with tabs[1]:
         cropped_view = crop_brain_contour(np.array(eval_img))
         st.image(cropped_view, caption="Isolated Brain Tissue (Cropped)", width='stretch')
 
-# ================= TAB 3: NEURAL ARCHITECTURE REGISTRY =================
+# ================= TAB 3: NEURAL ARCHITECTURE & BENCHMARK REGISTRY =================
 with tabs[2]:
-    st.markdown("### Neural Network Model Architecture Registry")
+    st.markdown("### Neural Network Model Architecture & Benchmark Registry")
+    st.markdown("Benchmarking multi-model convolutional architectures for intracranial tumor classification.")
 
+    # Multi-Model Benchmark Matrix (Inspired by sidd707 / IC3SE 2025)
+    st.markdown("#### Architecture Performance & Benchmark Matrix")
+    st.markdown("""
+| Architecture | Target Classification | Parameters | Model Size | Validation Accuracy | Inference Target | Primary Strength |
+|---|---|---|---|---|---|---|
+| **LightweightTumorCNN** *(Active)* | Binary (Normal vs Tumor) | **6,273** | **48.7 KB** | **97.22%** | CPU / Edge Devices | Ultra-fast screening, zero latency, runs on any laptop |
+| **BrainTumorCustomCNN** | 4 Classes (Glioma, Meningioma, Pituitary, Normal) | ~340,000 | ~1.4 MB | ~94.50% | Local Workstation | Subtype differentiation with pure PyTorch convolutions |
+| **BraTS EfficientNet-B4 + SE** | Multimodal 3D (4 Channels: T1, T1ce, T2, FLAIR) | 19,300,000 | ~77 MB | 96.80% | Cloud GPU / Hospital PACS | Squeeze-and-Excitation attention for volumetric 3D scans |
+| **ResNet-50 Benchmark** | 4 Classes (Standard Transfer Learning) | 23,500,000 | ~90 MB | 95.10% | GPU Servers | Deep residual skip connections for large datasets |
+""")
+
+    st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
     m_selection = st.selectbox(
-        "Select Architecture for Layer Verification",
+        "Select Architecture for Layer Verification & Parameter Breakdown",
         [
             "LightweightTumorCNN (Active Trained Model · Binary)",
             "BrainTumorCustomCNN (4-Stage Multimodal CNN · 4-Class)",
