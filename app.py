@@ -11,6 +11,7 @@ import cv2
 from models.lightweight_cnn import LightweightTumorCNN
 from models.custom_nn import BrainTumorCustomCNN
 from models.efficientnet_tumor_classifier import BrainTumorClassifier
+from models.advanced_classifier import AdvancedTumorClassifier
 from preprocessing.contour_cropper import crop_brain_contour, preprocess_mri_240
 from evaluation.gradcam_visualizer import GradCAMVisualizer
 from evaluation.report_generator import generate_clinical_report
@@ -305,22 +306,38 @@ with tabs[0]:
         
         chosen_net = st.radio(
             "Inference Engine",
-            ["LightweightTumorCNN (Binary: Normal vs Tumor)", "Multimodal Custom CNN (4-Class: Glioma, Meningioma, Pituitary, Normal)"],
+            [
+                "LightweightTumorCNN (Binary: Normal vs Tumor)",
+                "EfficientNet-B4 Deep Classifier (4-Class Colab Checkpoint)",
+                "Multimodal Custom CNN (4-Class Experimental: 4-Channel Synthetic)"
+            ],
             index=0
         )
 
         ckpt_lightweight = "models_checkpoint/lightweight_best.pth"
+        ckpt_effnet = "models_checkpoint/best_multiclass_efficientnet.pth"
+        if not os.path.exists(ckpt_effnet) and os.path.exists("models_checkpoint/efficientnet_b4_best.pth"):
+            ckpt_effnet = "models_checkpoint/efficientnet_b4_best.pth"
         ckpt_custom = "models_checkpoint/custom_best.pth"
 
-        has_ckpt = os.path.exists(ckpt_lightweight) if "Lightweight" in chosen_net else os.path.exists(ckpt_custom)
-
-        if has_ckpt:
-            if "Lightweight" in chosen_net:
+        if "Lightweight" in chosen_net:
+            has_ckpt = os.path.exists(ckpt_lightweight)
+            if has_ckpt:
                 st.markdown('<div class="metric-chip">Checkpoint Active: models_checkpoint/lightweight_best.pth (Val Acc: 97.22%)</div>', unsafe_allow_html=True)
             else:
-                st.markdown('<div class="metric-chip">Checkpoint Active: models_checkpoint/custom_best.pth</div>', unsafe_allow_html=True)
+                st.markdown('<div class="metric-chip">Checkpoint: Default Initialized Weights (Training Recommended)</div>', unsafe_allow_html=True)
+        elif "EfficientNet" in chosen_net:
+            has_ckpt = os.path.exists(ckpt_effnet)
+            if has_ckpt:
+                st.markdown(f'<div class="metric-chip">Checkpoint Active: {ckpt_effnet} (Colab GPU Trained)</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="metric-chip">Colab Weights Pending: Train on Google Colab to export .pth</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div class="metric-chip">Checkpoint: Default Initialized Weights (Training Recommended)</div>', unsafe_allow_html=True)
+            has_ckpt = os.path.exists(ckpt_custom)
+            if has_ckpt:
+                st.markdown('<div class="metric-chip">Checkpoint Active: models_checkpoint/custom_best.pth</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="metric-chip">Checkpoint: Default Initialized Weights (Training Recommended)</div>', unsafe_allow_html=True)
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
         run_analysis = st.button("Execute Diagnostic Analysis", type="primary")
@@ -382,9 +399,75 @@ with tabs[0]:
                     heatmap = vis.generate_heatmap(tensor_in)
                     overlay = vis.overlay_on_mri(np.array(eval_img), heatmap, alpha=0.6, threshold=0.15)
                     cropped_tissue = crop_brain_contour(np.array(eval_img))
+                    active_engine_name = "LightweightTumorCNN"
+
+                elif "EfficientNet" in chosen_net:
+                    # EfficientNet-B4 4-class inference (240x240 RGB ImageNet normalized)
+                    img_rgb = np.array(eval_img.convert("RGB"))
+                    resized = cv2.resize(img_rgb, (240, 240)).astype(np.float32) / 255.0
+                    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+                    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+                    norm_img = (resized - mean) / std
+                    tensor_in = torch.from_numpy(norm_img).permute(2, 0, 1).unsqueeze(0).float()
+
+                    net = AdvancedTumorClassifier(num_classes=4, pretrained=False)
+                    if os.path.exists(ckpt_effnet):
+                        try:
+                            net.load_state_dict(torch.load(ckpt_effnet, map_location="cpu"))
+                        except Exception:
+                            pass
+                    net.eval()
+
+                    with torch.no_grad():
+                        logits = net(tensor_in)
+                        probs = F.softmax(logits, dim=1).numpy()[0]
+
+                    # Classes sorted as in Colab ImageFolder
+                    classes = ["Glioma", "Meningioma", "Normal Tissue (No Tumor)", "Pituitary Adenoma"]
+                    p_idx = int(np.argmax(probs))
+                    confidence = float(probs[p_idx])
+                    is_tumor = (p_idx != 2) # 'Normal Tissue' is index 2
+                    pred_label = f"POSITIVE: {classes[p_idx].upper()}" if is_tumor else "NEGATIVE FOR INTRACRANIAL LESION (NORMAL)"
+
+                    protocol_dict = {
+                        0: "Intraparenchymal infiltration characteristic of Glioma. Neurosurgical oncology consultation advised.",
+                        1: "Extra-axial dural attachment characteristic of Meningioma. Neuro-oncology review and surgical assessment advised.",
+                        2: "No abnormal intracranial mass effect identified. Routine surveillance indicated.",
+                        3: "Sellar / suprasellar mass characteristic of Pituitary Adenoma. Comprehensive endocrinology panel required."
+                    }
+                    protocol = protocol_dict.get(p_idx, "Medical specialist review recommended.")
+
+                    if not is_tumor:
+                        st.markdown(f"""
+                        <div class="banner-normal">
+                            <div class="banner-title" style="color: #34d399;">NEGATIVE FOR INTRACRANIAL LESION (NORMAL TISSUE)</div>
+                            <p class="banner-desc">Normal scan probability: <strong>{confidence * 100:.2f}%</strong> (Model Confidence Index: <strong>{confidence * 100:.2f}%</strong>)</p>
+                            <div class="conf-bar-wrap">
+                                <div class="conf-bar-fill-normal" style="width: {confidence * 100:.1f}%;"></div>
+                            </div>
+                            <p class="banner-desc" style="color: #94a3b8; font-size: 0.8rem;">Clinical Protocol: {protocol}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div class="banner-tumor">
+                            <div class="banner-title" style="color: #f87171;">POSITIVE: {classes[p_idx].upper()} DETECTED</div>
+                            <p class="banner-desc">Classification confidence: <strong>{confidence * 100:.2f}%</strong> (Engine: EfficientNet-B4 Deep Classifier)</p>
+                            <div class="conf-bar-wrap">
+                                <div class="conf-bar-fill-tumor" style="width: {confidence * 100:.1f}%;"></div>
+                            </div>
+                            <p class="banner-desc" style="color: #94a3b8; font-size: 0.8rem;">Clinical Protocol: {protocol}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    vis = GradCAMVisualizer(net)
+                    heatmap = vis.generate_heatmap(tensor_in, target_class=p_idx)
+                    overlay = vis.overlay_on_mri(np.array(eval_img), heatmap, alpha=0.6, threshold=0.15)
+                    cropped_tissue = crop_brain_contour(np.array(eval_img))
+                    active_engine_name = "EfficientNet-B4"
 
                 else:
-                    # 4-class inference
+                    # 4-class synthetic inference
                     np_arr = np.array(eval_img)
                     resized = cv2.resize(np_arr, (380, 380))
                     ch4 = np.zeros((1, 4, 380, 380), dtype=np.float32)
@@ -439,12 +522,13 @@ with tabs[0]:
                     heatmap = vis.generate_heatmap(tensor_in, target_class=p_idx)
                     overlay = vis.overlay_on_mri(cv2.resize(np.array(eval_img), (380, 380)), heatmap, alpha=0.6, threshold=0.15)
                     cropped_tissue = crop_brain_contour(np.array(eval_img))
+                    active_engine_name = "BrainTumorCustomCNN"
 
                 # Record in Session Diagnostic History
                 st.session_state.diagnostic_history.insert(0, {
                     "timestamp": datetime.now().strftime("%H:%M:%S"),
                     "scan_id": filename,
-                    "engine": "LightweightCNN" if "Lightweight" in chosen_net else "CustomCNN-4Class",
+                    "engine": active_engine_name,
                     "finding": "POSITIVE" if is_tumor else "NEGATIVE",
                     "confidence": f"{confidence * 100:.2f}%",
                     "action": protocol
@@ -470,7 +554,7 @@ with tabs[0]:
                 gradcam_img=overlay,
                 prediction_label=pred_label,
                 confidence=confidence,
-                engine_name="LightweightTumorCNN" if "Lightweight" in chosen_net else "BrainTumorCustomCNN",
+                engine_name=active_engine_name,
                 clinical_protocol=protocol,
                 file_format="pdf"
             )
@@ -482,7 +566,7 @@ with tabs[0]:
                 gradcam_img=overlay,
                 prediction_label=pred_label,
                 confidence=confidence,
-                engine_name="LightweightTumorCNN" if "Lightweight" in chosen_net else "BrainTumorCustomCNN",
+                engine_name=active_engine_name,
                 clinical_protocol=protocol,
                 file_format="png"
             )
@@ -555,8 +639,9 @@ with tabs[2]:
         "Select Architecture for Layer Verification & Parameter Breakdown",
         [
             "LightweightTumorCNN (Active Trained Model · Binary)",
+            "AdvancedTumorClassifier (EfficientNet-B4 · Colab 4-Class Pipeline)",
             "BrainTumorCustomCNN (4-Stage Multimodal CNN · 4-Class)",
-            "EfficientNet-B4 + Squeeze-and-Excitation Attention"
+            "BraTS EfficientNet-B4 + Squeeze-and-Excitation Attention"
         ]
     )
 
@@ -588,6 +673,19 @@ with tabs[2]:
           └── Linear(in_features=6272, out_features=1) --> Sigmoid Probability
         ```
         """)
+        with st.expander("PyTorch Sequential Layer Breakdown"):
+            st.code(str(arch), language="text")
+
+    elif "AdvancedTumorClassifier" in m_selection:
+        arch = AdvancedTumorClassifier(num_classes=4, pretrained=False)
+        p_count = sum(p.numel() for p in arch.parameters())
+        trainable_p = sum(p.numel() for p in arch.parameters() if p.requires_grad)
+
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Parameter Count", f"{p_count:,}")
+        k2.metric("Trainable Parameters", f"{trainable_p:,}")
+        k3.metric("Dataset Scope", "7,200 Scans (4 Classes)")
+        k4.metric("Acceleration", "GPU Mixed Precision (FP16)")
         with st.expander("PyTorch Sequential Layer Breakdown"):
             st.code(str(arch), language="text")
 

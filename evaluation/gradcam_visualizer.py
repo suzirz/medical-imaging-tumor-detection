@@ -76,6 +76,12 @@ class GradCAMVisualizer:
             heatmap = cv2.resize(smoothed, (w, h))
             return heatmap
         else:
+            if tensor.grad is not None:
+                inp_g = tensor.grad[0].abs().mean(dim=0).detach().cpu().numpy()
+                smoothed = cv2.GaussianBlur(inp_g.astype(np.float32), (25, 25), 9)
+                if smoothed.max() > 0:
+                    smoothed = smoothed / smoothed.max()
+                return cv2.resize(smoothed, (w, h))
             return np.zeros((h, w), dtype=np.float32)
 
     def overlay_on_mri(self, mri_slice, heatmap: np.ndarray, alpha: float = 0.55, threshold: float = 0.15) -> np.ndarray:
