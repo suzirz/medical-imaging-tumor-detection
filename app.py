@@ -10,6 +10,7 @@ from ui import (
     render_workstation_tab,
     render_segmentation_tab,
     render_vlm_tab,
+    render_retrieval_tab,
     render_contour_tab,
     render_registry_tab
 )
@@ -46,6 +47,7 @@ tabs = st.tabs([
     "Clinical Diagnostic Workstation",
     "Deep Semantic Segmentation (Attention U-Net)",
     "Vision-Language Copilot & Interactive VQA",
+    "Case-Based Retrieval & Radiogenomics (CBMIR)",
     "Contour Cropping & Skull Stripping",
     "Neural Architecture & Benchmark Registry"
 ])
@@ -62,11 +64,16 @@ with tabs[1]:
 with tabs[2]:
     render_vlm_tab(eval_img, filename)
 
-# Tab 4: Contour Cropping & Morphological Skull Stripping Pipeline
+# Tab 4: Content-Based Medical Image Retrieval & Molecular Radiogenomics (CBMIR)
 with tabs[3]:
+    render_retrieval_tab(eval_img, filename)
+
+# Tab 5: Contour Cropping & Morphological Skull Stripping Pipeline
+with tabs[4]:
     render_contour_tab(eval_img)
 
-# Tab 5: Neural Architecture & Multi-Model Benchmark Registry
-with tabs[4]:
+# Tab 6: Neural Architecture & Multi-Model Benchmark Registry
+with tabs[5]:
     render_registry_tab()
+
 
