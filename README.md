@@ -52,6 +52,22 @@ Clinical research backbone for multimodal 3D MRI volumes:
 * Squeeze-and-Excitation channel gating ($r=16$) to amplify contrast in necrotic and active tumor regions.
 * Optimized via **Two-Phase Transfer Learning** and **MultiClassFocalLoss** ($\gamma=2.0$).
 
+### 5. VisionTransformerTumorClassifier (ViT-B/16 Self-Attention Transformer)
+State-of-the-art vision transformer adapting multi-head self-attention directly to cranial MRI diagnostics:
+* **Tokenization**: Linearly projects non-overlapping $16 \times 16$ pixel patches ($14 \times 14 = 196$ patch tokens) into a $768$-dimensional embedding space.
+* **Global Context**: Prepend a learnable `[CLS]` classification token and add 1D learnable position embeddings across all $197$ tokens.
+* **Self-Attention Engine**: 12 Transformer Encoder layers, each equipped with 12 Multi-Head Self-Attention (MHSA) heads ($d_{\text{head}}=64$) and MLP feed-forward networks (hidden dimension $3072$) with GELU activations.
+* **Inductive Freedom**: Captures long-range contralateral cranial dependencies without the local translational equivariance inductive bias of CNNs.
+* **Parameter Scale**: $86.5\text{M}$ parameters ($~330\text{ MB}$).
+
+### 6. DenseNetTumorClassifier (DenseNet-121 Feature Reuse CNN)
+Ultra-dense convolutional network specialized in preserving fine tumor margins and boundary transitions:
+* **Iterative Feature Concatenation**: Directly connects each layer to every subsequent layer in a feed-forward fashion across 4 Dense Blocks ($6, 12, 24, 16$ convolutional layers, growth rate $k=32$).
+* **Gradient Highway**: Eliminates vanishing gradients during backpropagation and maximizes parameter efficiency through continuous multi-scale feature reuse.
+* **Transition Bottlenecks**: Three transition layers using $1 \times 1$ convolutions and $2 \times 2$ average pooling for feature dimension compression.
+* **Classification Head**: Global Average Pooling with $1024$-dimensional bottleneck features connected to a regularized linear head ($1024 \rightarrow 256 \rightarrow 4$).
+* **Parameter Scale**: $7.98\text{M}$ parameters ($~31\text{ MB}$).
+
 ---
 
 ## Preprocessing: Skull Stripping via Extreme Contour Extraction
@@ -112,7 +128,7 @@ The pipeline integrates automated morphometric feature extraction to assist neur
 
 The interactive dashboard (`app.py`) functions as a dedicated diagnostic workstation:
 
-* **Multi-Engine Switching**: Seamlessly toggle between `LightweightTumorCNN` (instant CPU binary screening) and `AdvancedTumorClassifier` (`EfficientNet-B4` 4-class subtype differentiation).
+* **Multi-Engine Switching**: Seamlessly toggle between five inference paradigms: `EfficientNet-B4` (compound scaling CNN with active Colab checkpoint), `Vision Transformer (ViT-B/16)` (86.5M self-attention parameters), `DenseNet-121` (dense feature reuse CNN), `LightweightTumorCNN` (sub-millisecond CPU binary screening), and `BrainTumorCustomCNN` (multimodal 4-channel).
 * **Three-Panel Visual Evidence View**: Displays Skull-Stripped Tissue Crop, Grad-CAM++ Saliency Heatmap, and Digital PACS Calipers side-by-side.
 * **Clinical Protocol Directives**: Automatic translation of model probabilities into clinical directives (urgent neuro-oncology referral, endocrine panel, or routine surveillance).
 * **Formal 4-Panel PDF & PNG Report Export**: One-click generation of 200 DPI clinical diagnostic summary sheets including Scan ID, acquisition metadata, confidence index, 4-panel visual evidence (Scan, Contour, Grad-CAM, Calipers), quantitative morphometry tables, and legal regulatory disclaimers.

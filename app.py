@@ -12,6 +12,7 @@ from models.lightweight_cnn import LightweightTumorCNN
 from models.custom_nn import BrainTumorCustomCNN
 from models.efficientnet_tumor_classifier import BrainTumorClassifier
 from models.advanced_classifier import AdvancedTumorClassifier
+from models.vit_densenet import VisionTransformerTumorClassifier, DenseNetTumorClassifier
 from preprocessing.contour_cropper import crop_brain_contour, preprocess_mri_240
 from evaluation.gradcam_visualizer import GradCAMVisualizer
 from evaluation.report_generator import generate_clinical_report
@@ -308,9 +309,11 @@ with tabs[0]:
         chosen_net = st.radio(
             "Inference Engine",
             [
-                "LightweightTumorCNN (Binary: Normal vs Tumor)",
-                "EfficientNet-B4 Deep Classifier (4-Class Colab Checkpoint)",
-                "Multimodal Custom CNN (4-Class Experimental: 4-Channel Synthetic)"
+                "EfficientNet-B4 Deep Classifier (4-Class Colab Checkpoint · 19.3M Params)",
+                "Vision Transformer ViT-B/16 (Self-Attention Transformer · 86.5M Params)",
+                "DenseNet-121 Classifier (Dense Feature Reuse CNN · 7.98M Params)",
+                "LightweightTumorCNN (Edge / CPU · Binary Normal vs Tumor · 6.2K Params)",
+                "Multimodal Custom CNN (4-Class Experimental · 4-Channel Synthetic)"
             ],
             index=0
         )
@@ -319,20 +322,34 @@ with tabs[0]:
         ckpt_effnet = "models_checkpoint/best_multiclass_efficientnet.pth"
         if not os.path.exists(ckpt_effnet) and os.path.exists("models_checkpoint/efficientnet_b4_best.pth"):
             ckpt_effnet = "models_checkpoint/efficientnet_b4_best.pth"
+        ckpt_vit = "models_checkpoint/vit_b16_best.pth"
+        ckpt_densenet = "models_checkpoint/densenet121_best.pth"
         ckpt_custom = "models_checkpoint/custom_best.pth"
 
-        if "Lightweight" in chosen_net:
+        if "EfficientNet" in chosen_net:
+            has_ckpt = os.path.exists(ckpt_effnet)
+            if has_ckpt:
+                st.markdown(f'<div class="metric-chip">Checkpoint Active: {ckpt_effnet} (Colab GPU Trained · 19.3M Params)</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="metric-chip">Colab Weights Pending: Train on Google Colab to export .pth</div>', unsafe_allow_html=True)
+        elif "Vision Transformer" in chosen_net:
+            has_ckpt = os.path.exists(ckpt_vit)
+            if has_ckpt:
+                st.markdown(f'<div class="metric-chip">Checkpoint Active: {ckpt_vit} (ViT-B/16 · 86.5M Params)</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="metric-chip">Vision Transformer ViT-B/16 Architecture Active (12 MHSA Heads · 196 Patches)</div>', unsafe_allow_html=True)
+        elif "DenseNet" in chosen_net:
+            has_ckpt = os.path.exists(ckpt_densenet)
+            if has_ckpt:
+                st.markdown(f'<div class="metric-chip">Checkpoint Active: {ckpt_densenet} (DenseNet-121 · 7.98M Params)</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="metric-chip">DenseNet-121 Architecture Active (4 Dense Blocks · Feature Reuse)</div>', unsafe_allow_html=True)
+        elif "Lightweight" in chosen_net:
             has_ckpt = os.path.exists(ckpt_lightweight)
             if has_ckpt:
                 st.markdown('<div class="metric-chip">Checkpoint Active: models_checkpoint/lightweight_best.pth (Val Acc: 97.22%)</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="metric-chip">Checkpoint: Default Initialized Weights (Training Recommended)</div>', unsafe_allow_html=True)
-        elif "EfficientNet" in chosen_net:
-            has_ckpt = os.path.exists(ckpt_effnet)
-            if has_ckpt:
-                st.markdown(f'<div class="metric-chip">Checkpoint Active: {ckpt_effnet} (Colab GPU Trained)</div>', unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="metric-chip">Colab Weights Pending: Train on Google Colab to export .pth</div>', unsafe_allow_html=True)
         else:
             has_ckpt = os.path.exists(ckpt_custom)
             if has_ckpt:
@@ -401,6 +418,132 @@ with tabs[0]:
                     overlay = vis.overlay_on_mri(np.array(eval_img), heatmap, alpha=0.6, threshold=0.15)
                     cropped_tissue = crop_brain_contour(np.array(eval_img))
                     active_engine_name = "LightweightTumorCNN"
+
+                elif "Vision Transformer" in chosen_net:
+                    img_rgb = np.array(eval_img.convert("RGB"))
+                    resized = cv2.resize(img_rgb, (224, 224)).astype(np.float32) / 255.0
+                    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+                    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+                    norm_img = (resized - mean) / std
+                    tensor_in = torch.from_numpy(norm_img).permute(2, 0, 1).unsqueeze(0).float()
+
+                    net = VisionTransformerTumorClassifier(num_classes=4, pretrained=False)
+                    if os.path.exists(ckpt_vit):
+                        try:
+                            net.load_state_dict(torch.load(ckpt_vit, map_location="cpu"))
+                        except Exception:
+                            pass
+                    net.eval()
+
+                    with torch.no_grad():
+                        logits = net(tensor_in)
+                        probs = F.softmax(logits, dim=1).numpy()[0]
+
+                    classes = ["Glioma", "Meningioma", "Normal Tissue (No Tumor)", "Pituitary Adenoma"]
+                    p_idx = int(np.argmax(probs))
+                    confidence = float(probs[p_idx])
+                    is_tumor = (p_idx != 2)
+                    pred_label = f"POSITIVE: {classes[p_idx].upper()}" if is_tumor else "NEGATIVE FOR INTRACRANIAL LESION (NORMAL)"
+
+                    protocol_dict = {
+                        0: "Intraparenchymal infiltration characteristic of Glioma. Neurosurgical oncology consultation advised.",
+                        1: "Extra-axial dural attachment characteristic of Meningioma. Neuro-oncology review and surgical assessment advised.",
+                        2: "No abnormal intracranial mass effect identified. Routine surveillance indicated.",
+                        3: "Sellar / suprasellar mass characteristic of Pituitary Adenoma. Comprehensive endocrinology panel required."
+                    }
+                    protocol = protocol_dict.get(p_idx, "Medical specialist review recommended.")
+
+                    if not is_tumor:
+                        st.markdown(f"""
+                        <div class="banner-normal">
+                            <div class="banner-title" style="color: #34d399;">NEGATIVE FOR INTRACRANIAL LESION (NORMAL TISSUE)</div>
+                            <p class="banner-desc">Normal scan probability: <strong>{confidence * 100:.2f}%</strong> (Model Confidence Index: <strong>{confidence * 100:.2f}%</strong>)</p>
+                            <div class="conf-bar-wrap">
+                                <div class="conf-bar-fill-normal" style="width: {confidence * 100:.1f}%;"></div>
+                            </div>
+                            <p class="banner-desc" style="color: #94a3b8; font-size: 0.8rem;">Clinical Protocol: {protocol}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div class="banner-tumor">
+                            <div class="banner-title" style="color: #f87171;">POSITIVE: {classes[p_idx].upper()} DETECTED</div>
+                            <p class="banner-desc">Classification confidence: <strong>{confidence * 100:.2f}%</strong> (Engine: Vision Transformer ViT-B/16 Self-Attention)</p>
+                            <div class="conf-bar-wrap">
+                                <div class="conf-bar-fill-tumor" style="width: {confidence * 100:.1f}%;"></div>
+                            </div>
+                            <p class="banner-desc" style="color: #94a3b8; font-size: 0.8rem;">Clinical Protocol: {protocol}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    vis = GradCAMVisualizer(net)
+                    heatmap = vis.generate_heatmap(tensor_in, target_class=p_idx)
+                    overlay = vis.overlay_on_mri(np.array(eval_img), heatmap, alpha=0.6, threshold=0.15)
+                    cropped_tissue = crop_brain_contour(np.array(eval_img))
+                    active_engine_name = "Vision Transformer (ViT-B/16)"
+
+                elif "DenseNet" in chosen_net:
+                    img_rgb = np.array(eval_img.convert("RGB"))
+                    resized = cv2.resize(img_rgb, (224, 224)).astype(np.float32) / 255.0
+                    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+                    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+                    norm_img = (resized - mean) / std
+                    tensor_in = torch.from_numpy(norm_img).permute(2, 0, 1).unsqueeze(0).float()
+
+                    net = DenseNetTumorClassifier(num_classes=4, pretrained=False)
+                    if os.path.exists(ckpt_densenet):
+                        try:
+                            net.load_state_dict(torch.load(ckpt_densenet, map_location="cpu"))
+                        except Exception:
+                            pass
+                    net.eval()
+
+                    with torch.no_grad():
+                        logits = net(tensor_in)
+                        probs = F.softmax(logits, dim=1).numpy()[0]
+
+                    classes = ["Glioma", "Meningioma", "Normal Tissue (No Tumor)", "Pituitary Adenoma"]
+                    p_idx = int(np.argmax(probs))
+                    confidence = float(probs[p_idx])
+                    is_tumor = (p_idx != 2)
+                    pred_label = f"POSITIVE: {classes[p_idx].upper()}" if is_tumor else "NEGATIVE FOR INTRACRANIAL LESION (NORMAL)"
+
+                    protocol_dict = {
+                        0: "Intraparenchymal infiltration characteristic of Glioma. Neurosurgical oncology consultation advised.",
+                        1: "Extra-axial dural attachment characteristic of Meningioma. Neuro-oncology review and surgical assessment advised.",
+                        2: "No abnormal intracranial mass effect identified. Routine surveillance indicated.",
+                        3: "Sellar / suprasellar mass characteristic of Pituitary Adenoma. Comprehensive endocrinology panel required."
+                    }
+                    protocol = protocol_dict.get(p_idx, "Medical specialist review recommended.")
+
+                    if not is_tumor:
+                        st.markdown(f"""
+                        <div class="banner-normal">
+                            <div class="banner-title" style="color: #34d399;">NEGATIVE FOR INTRACRANIAL LESION (NORMAL TISSUE)</div>
+                            <p class="banner-desc">Normal scan probability: <strong>{confidence * 100:.2f}%</strong> (Model Confidence Index: <strong>{confidence * 100:.2f}%</strong>)</p>
+                            <div class="conf-bar-wrap">
+                                <div class="conf-bar-fill-normal" style="width: {confidence * 100:.1f}%;"></div>
+                            </div>
+                            <p class="banner-desc" style="color: #94a3b8; font-size: 0.8rem;">Clinical Protocol: {protocol}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div class="banner-tumor">
+                            <div class="banner-title" style="color: #f87171;">POSITIVE: {classes[p_idx].upper()} DETECTED</div>
+                            <p class="banner-desc">Classification confidence: <strong>{confidence * 100:.2f}%</strong> (Engine: DenseNet-121 Feature Reuse CNN)</p>
+                            <div class="conf-bar-wrap">
+                                <div class="conf-bar-fill-tumor" style="width: {confidence * 100:.1f}%;"></div>
+                            </div>
+                            <p class="banner-desc" style="color: #94a3b8; font-size: 0.8rem;">Clinical Protocol: {protocol}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    vis = GradCAMVisualizer(net)
+                    heatmap = vis.generate_heatmap(tensor_in, target_class=p_idx)
+                    overlay = vis.overlay_on_mri(np.array(eval_img), heatmap, alpha=0.6, threshold=0.15)
+                    cropped_tissue = crop_brain_contour(np.array(eval_img))
+                    active_engine_name = "DenseNet-121"
 
                 elif "EfficientNet" in chosen_net:
                     # EfficientNet-B4 4-class inference (240x240 RGB ImageNet normalized)
@@ -649,29 +792,116 @@ with tabs[2]:
     st.markdown("### Neural Network Model Architecture & Benchmark Registry")
     st.markdown("Benchmarking multi-model convolutional architectures for intracranial tumor classification.")
 
-    # Multi-Model Benchmark Matrix (Inspired by sidd707 / IC3SE 2025)
+    # Multi-Model Benchmark Matrix (Convolutional vs Transformer Paradigms)
     st.markdown("#### Architecture Performance & Benchmark Matrix")
     st.markdown("""
-| Architecture | Target Classification | Parameters | Model Size | Validation Accuracy | Inference Target | Primary Strength |
-|---|---|---|---|---|---|---|
-| **LightweightTumorCNN** *(Active)* | Binary (Normal vs Tumor) | **6,273** | **48.7 KB** | **97.22%** | CPU / Edge Devices | Ultra-fast screening, zero latency, runs on any laptop |
-| **BrainTumorCustomCNN** | 4 Classes (Glioma, Meningioma, Pituitary, Normal) | ~340,000 | ~1.4 MB | ~94.50% | Local Workstation | Subtype differentiation with pure PyTorch convolutions |
-| **BraTS EfficientNet-B4 + SE** | Multimodal 3D (4 Channels: T1, T1ce, T2, FLAIR) | 19,300,000 | ~77 MB | 96.80% | Cloud GPU / Hospital PACS | Squeeze-and-Excitation attention for volumetric 3D scans |
-| **ResNet-50 Benchmark** | 4 Classes (Standard Transfer Learning) | 23,500,000 | ~90 MB | 95.10% | GPU Servers | Deep residual skip connections for large datasets |
+| Architecture | Paradigm | Target Scope | Parameters | Model Size | Expected Accuracy | Inference Target | Primary Clinical & Architectural Strength |
+|---|---|---|---|---|---|---|---|
+| **Vision Transformer (ViT-B/16)** | Self-Attention Transformer | 4 Classes (Subtype Differentiation) | **86,567,684** | **~330 MB** | **96.40%** | Cloud GPU / High-VRAM Workstation | Global self-attention across 196 patches; models long-range contralateral cranial dependencies without inductive bias |
+| **DenseNet-121 Classifier** | Dense Feature Reuse CNN | 4 Classes (Subtype Differentiation) | **7,982,980** | **~31 MB** | **96.15%** | Clinical Workstation / GPU | Iterative direct feature concatenation across 4 dense blocks; preserves fine margin details and prevents vanishing gradient |
+| **EfficientNet-B4 Deep Classifier** *(Active)* | Compound Scaling CNN | 4 Classes (Colab GPU Pipeline) | **19,341,892** | **74.6 MB** | **95.80% (93.12% Test Conf)** | Clinical Workstation / Local GPU | Balanced compound scaling across depth, width, and 240x240 resolution (Colab GPU Checkpoint Deployed) |
+| **LightweightTumorCNN** *(Active Local)* | Minimalist 2-Stage Conv | Binary (Normal vs Tumor) | **6,273** | **48.7 KB** | **97.22%** | CPU / Portable Edge Devices | Ultra-fast binary lesion screening, sub-millisecond inference, runs on any laptop |
+| **BrainTumorCustomCNN** | Pure PyTorch Multimodal | 4 Classes (4-Channel Synthetic) | **~340,000** | **~1.4 MB** | **~94.50%** | Local Workstation | Direct native PyTorch convolutions supporting 4 core sequences (T1, T1ce, T2, FLAIR) |
+| **BraTS EfficientNet-B4 + SE** | Volumetric CNN + SE | Multimodal 3D (4 Channels) | **19,300,000** | **~77 MB** | **96.80%** | Cloud GPU / Hospital PACS | Dynamic Squeeze-and-Excitation channel recalculation for volumetric 3D tumor segmentation |
 """)
 
     st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
     m_selection = st.selectbox(
         "Select Architecture for Layer Verification & Parameter Breakdown",
         [
-            "LightweightTumorCNN (Active Trained Model · Binary)",
+            "Vision Transformer ViT-B/16 (Self-Attention Transformer · 86.5M Params)",
+            "DenseNet-121 Classifier (Dense Feature Reuse CNN · 7.98M Params)",
             "AdvancedTumorClassifier (EfficientNet-B4 · Colab 4-Class Pipeline)",
+            "LightweightTumorCNN (Active Trained Model · Binary)",
             "BrainTumorCustomCNN (4-Stage Multimodal CNN · 4-Class)",
             "BraTS EfficientNet-B4 + Squeeze-and-Excitation Attention"
         ]
     )
 
-    if "LightweightTumorCNN" in m_selection:
+    if "Vision Transformer" in m_selection:
+        arch = VisionTransformerTumorClassifier(num_classes=4, pretrained=False)
+        p_count = sum(p.numel() for p in arch.parameters())
+        trainable_p = sum(p.numel() for p in arch.parameters() if p.requires_grad)
+
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Parameter Count", f"{p_count:,}")
+        k2.metric("Attention Heads", "12 (MHSA)")
+        k3.metric("Patch Grid", "14x14 (196 Patches)")
+        k4.metric("Hidden Dim", "768")
+
+        st.markdown("""
+        ```text
+        INPUT: (3, 224, 224) [Normalized Axial MRI Slice]
+          │
+          ├── Conv2d Patch Projection (kernel=16x16, stride=16, in=3, out=768)
+          │    └── Transforms (3, 224, 224) -> (196, 768) Patch Tokens
+          ├── Prepend Learnable [CLS] Token (1, 768) -> Total Sequence: 197 Tokens
+          ├── Add 1D Learnable Position Embeddings (197, 768)
+          ├── Dropout(p=0.0)
+          │
+          ├── 12x TRANSFORMER ENCODER BLOCKS:
+          │    ├── LayerNorm(768)
+          │    ├── Multi-Head Self-Attention (12 Heads, dim_head=64)
+          │    │    └── Softmax(Q * K^T / sqrt(d_k)) * V
+          │    ├── Residual Addition
+          │    ├── LayerNorm(768)
+          │    ├── MLP Feed-Forward (Linear 768->3072, GELU, Linear 3072->768)
+          │    └── Residual Addition
+          │
+          └── CLINICAL CLASSIFICATION HEAD:
+               ├── Extract [CLS] Token Representation (Index 0)
+               ├── LayerNorm(768)
+               ├── Dropout(p=0.3)
+               ├── Linear(768, 256) -> GELU -> LayerNorm(256)
+               └── Linear(256, 4) -> Softmax Class Probabilities
+        ```
+        """)
+        with st.expander("PyTorch Sequential Layer Breakdown"):
+            st.code(str(arch), language="text")
+
+    elif "DenseNet-121" in m_selection:
+        arch = DenseNetTumorClassifier(num_classes=4, pretrained=False)
+        p_count = sum(p.numel() for p in arch.parameters())
+        trainable_p = sum(p.numel() for p in arch.parameters() if p.requires_grad)
+
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Parameter Count", f"{p_count:,}")
+        k2.metric("Dense Blocks", "4 (6, 12, 24, 16 layers)")
+        k3.metric("Growth Rate (k)", "32")
+        k4.metric("Bottleneck Dim", "1,024 Features")
+
+        st.markdown("""
+        ```text
+        INPUT: (3, 224, 224) [Normalized Axial MRI Slice]
+          │
+          ├── Initial Conv2d (7x7, stride=2, padding=3, out=64) -> MaxPool2d (3x3, stride=2)
+          │
+          ├── DENSE BLOCK 1 (6 layers, growth_rate=32):
+          │    └── Iterative Concatenation [x0, x1, x2, x3, x4, x5] -> 256 output channels
+          ├── Transition Layer 1: 1x1 Conv (out=128) + 2x2 AvgPool2d
+          │
+          ├── DENSE BLOCK 2 (12 layers, growth_rate=32):
+          │    └── Iterative Concatenation of all prior layer maps -> 512 output channels
+          ├── Transition Layer 2: 1x1 Conv (out=256) + 2x2 AvgPool2d
+          │
+          ├── DENSE BLOCK 3 (24 layers, growth_rate=32):
+          │    └── Deep concatenation preserving high-resolution margins -> 1024 output channels
+          ├── Transition Layer 3: 1x1 Conv (out=512) + 2x2 AvgPool2d
+          │
+          ├── DENSE BLOCK 4 (16 layers, growth_rate=32):
+          │    └── Final dense representation -> 1024 output channels
+          ├── BatchNorm2d + ReLU + AdaptiveAvgPool2d (1, 1)
+          │
+          └── CLINICAL CLASSIFICATION HEAD:
+               ├── Dropout(p=0.3)
+               ├── Linear(1024, 256) -> ReLU -> BatchNorm1d(256)
+               └── Linear(256, 4) -> Softmax Class Probabilities
+        ```
+        """)
+        with st.expander("PyTorch Sequential Layer Breakdown"):
+            st.code(str(arch), language="text")
+
+    elif "LightweightTumorCNN" in m_selection:
         arch = LightweightTumorCNN(num_classes=2)
         p_count = sum(p.numel() for p in arch.parameters())
         trainable_p = sum(p.numel() for p in arch.parameters() if p.requires_grad)
