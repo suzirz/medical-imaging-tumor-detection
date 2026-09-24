@@ -1,0 +1,73 @@
+{
+  "project_name": "BraTS 2023 Brain Tumor Detection & Classification Pipeline",
+  "version": "1.0.0",
+  "data": {
+    "root_dir": "./data/BraTS2023",
+    "modalities": ["t1", "t1ce", "t2", "flair"],
+    "num_classes": 4,
+    "class_names": ["Normal", "Glioma", "Meningioma", "Tumor Hipofisis"],
+    "image_size": [380, 380]
+  },
+  "preprocessing": {
+    "bias_correction": "N4ITK",
+    "n4_iterations": [50, 50, 50, 50],
+    "skull_strip": true,
+    "normalization_mode": "z_score_non_zero_voxels",
+    "isotropic_spacing": [1.0, 1.0, 1.0],
+    "slice_strategy": "axial_middle_60_percent"
+  },
+  "augmentation": {
+    "random_rotate_degrees": 15,
+    "horizontal_flip": true,
+    "gaussian_noise_std": 0.05,
+    "mixup": false
+  },
+  "model": {
+    "architecture": "EfficientNet-B4",
+    "pretrained": true,
+    "in_channels": 4,
+    "use_se_attention": true,
+    "se_reduction_ratio": 16,
+    "dropout_head": 0.4,
+    "dropout_final": 0.2
+  },
+  "training": {
+    "phase1": {
+      "epochs": 20,
+      "learning_rate": 0.001,
+      "optimizer": "AdamW",
+      "weight_decay": 0.0001,
+      "scheduler": "ReduceLROnPlateau",
+      "patience": 5,
+      "factor": 0.5
+    },
+    "phase2": {
+      "epochs": 80,
+      "learning_rate": 0.00001,
+      "optimizer": "AdamW",
+      "weight_decay": 0.0001,
+      "scheduler": "CosineAnnealingLR",
+      "t_max": 80,
+      "min_lr": 1e-7
+    },
+    "loss": {
+      "name": "FocalLoss",
+      "gamma": 2.0,
+      "alpha": [0.25, 0.25, 0.25, 0.25]
+    },
+    "batch_size": 16,
+    "mixed_precision_amp": true,
+    "gradient_clipping_max_norm": 1.0
+  },
+  "evaluation": {
+    "confidence_threshold": 0.50,
+    "cross_validation_mode": "5-Fold Stratified CV",
+    "cv_folds": 5,
+    "metrics": ["accuracy", "precision", "recall", "f1_macro", "auc_roc", "cohen_kappa"]
+  },
+  "output": {
+    "checkpoint_dir": "models_checkpoint",
+    "logs_dir": "logs",
+    "results_dir": "results"
+  }
+}
