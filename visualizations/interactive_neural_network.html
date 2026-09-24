@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroScan — Interactive Neural Network Architecture Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #090d16;
+            color: #e2e8f0;
+            font-family: 'Inter', -apple-system, sans-serif;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #1e293b;
+            background: #0b0f1a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-left h1 {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #f8fafc;
+            letter-spacing: -0.02em;
+        }
+        .header-left p {
+            font-size: 0.82rem;
+            color: #94a3b8;
+            margin-top: 3px;
+        }
+        .badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(56, 189, 248, 0.1);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            display: inline-block;
+            margin-bottom: 4px;
+        }
+        .controls {
+            display: flex;
+            gap: 0.75rem;
+        }
+        .btn {
+            background: #1e293b;
+            color: #f8fafc;
+            border: 1px solid #334155;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn:hover {
+            background: #0284c7;
+            border-color: #38bdf8;
+        }
+        .btn-active {
+            background: #0284c7;
+            border-color: #38bdf8;
+        }
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 180px);
+            background: radial-gradient(circle at 50% 50%, #0d1527 0%, #090d16 100%);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .info-panel {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 2rem;
+            right: 2rem;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .layer-detail {
+            font-size: 0.85rem;
+        }
+        .layer-detail strong {
+            color: #38bdf8;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .tensor-tag {
+            font-family: 'JetBrains Mono', monospace;
+            background: #111827;
+            padding: 3px 8px;
+            border-radius: 4px;
+            border: 1px solid #1f2937;
+            color: #34d399;
+            font-size: 0.75rem;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-left">
+            <span class="badge">Local Interactive Visualizer</span>
+            <h1>NeuroScan Deep Neural Synapse & Tensor Flowchart</h1>
+            <p>Interconnected multi-layer network with live feed-forward synaptic pulses and tensor flow.</p>
+        </div>
+        <div class="controls">
+            <button class="btn btn-active" id="btn-toggle-pulse">Toggle Pulse Animation</button>
+            <button class="btn" id="btn-reset">Reset Flow</button>
+        </div>
+    </header>
+
+    <div id="canvas-container">
+        <canvas id="nnCanvas"></canvas>
+        <div class="info-panel">
+            <div class="layer-detail" id="layer-hover-text">
+                Hover kursor pada neuron untuk melihat detail aktivasi & bobot sinapsis.
+            </div>
+            <div style="font-size: 0.75rem; color: #64748b; font-family: 'JetBrains Mono', monospace;">
+                Forward Inference Speed: ~0.82 ms (CPU Edge)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('nnCanvas');
+        const ctx = canvas.getContext('2d');
+        const infoText = document.getElementById('layer-hover-text');
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const layersConfig = [
+            { name: "Input Slice", sub: "MRI (3x240x240)", nodes: 5, color: "#38bdf8", tensor: "[B, 3, 240, 240]" },
+            { name: "Conv2D Stage 1", sub: "32 Filters (7x7)", nodes: 9, color: "#0ea5e9", tensor: "[B, 32, 238, 238]" },
+            { name: "MaxPool Gating", sub: "4x4 Stride", nodes: 7, color: "#0284c7", tensor: "[B, 32, 60, 60]" },
+            { name: "Attention Gate", sub: "12 MHSA Heads", nodes: 11, color: "#a855f7", tensor: "[B, 196, 768]" },
+            { name: "Dense Latent 1", sub: "512 Neurons", nodes: 9, color: "#10b981", tensor: "[B, 512]" },
+            { name: "Dense Latent 2", sub: "128 Neurons", nodes: 7, color: "#34d399", tensor: "[B, 128]" },
+            { name: "Diagnostic Head", sub: "4 Classes", nodes: 4, color: "#f43f5e", tensor: "[B, 4] Logits" }
+        ];
+
+        const outputLabels = ["Glioma (94.2%)", "Meningioma (97.8%)", "Pituitary (96.5%)", "Normal (99.1%)"];
+
+        let nodes = [];
+        let pulses = [];
+        let isPulsing = true;
+
+        function buildNodes() {
+            nodes = [];
+            const w = canvas.width;
+            const h = canvas.height;
+            const hSpacing = w / (layersConfig.length + 0.8);
+
+            layersConfig.forEach((l, lIdx) => {
+                const x = (lIdx + 0.85) * hSpacing;
+                const vSpacing = (h - 160) / (l.nodes + 1);
+
+                for (let i = 0; i < l.nodes; i++) {
+                    const y = 80 + (i + 1) * vSpacing;
+                    nodes.push({
+                        layerIdx: lIdx,
+                        nodeIdx: i,
+                        x: x,
+                        y: y,
+                        color: l.color,
+                        radius: 8,
+                        pulsePhase: Math.random() * Math.PI * 2
+                    });
+                }
+            });
+        }
+        buildNodes();
+
+        function spawnPulse() {
+            if (!isPulsing) return;
+            const startNodes = nodes.filter(n => n.layerIdx === 0);
+            const source = startNodes[Math.floor(Math.random() * startNodes.length)];
+            
+            // Find target in next layer
+            const nextNodes = nodes.filter(n => n.layerIdx === 1);
+            const target = nextNodes[Math.floor(Math.random() * nextNodes.length)];
+
+            pulses.push({
+                x: source.x,
+                y: source.y,
+                targetX: target.x,
+                targetY: target.y,
+                progress: 0,
+                speed: 0.02 + Math.random() * 0.015,
+                currentLayer: 0,
+                color: source.color
+            });
+        }
+
+        setInterval(spawnPulse, 140);
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Draw Synapses (Connections)
+            for (let i = 0; i < nodes.length; i++) {
+                const n1 = nodes[i];
+                if (n1.layerIdx >= layersConfig.length - 1) continue;
+
+                const nextLayerNodes = nodes.filter(n => n.layerIdx === n1.layerIdx + 1);
+                nextLayerNodes.forEach(n2 => {
+                    ctx.beginPath();
+                    ctx.moveTo(n1.x, n1.y);
+                    ctx.lineTo(n2.x, n2.y);
+                    ctx.strokeStyle = "rgba(51, 65, 85, 0.25)";
+                    ctx.lineWidth = 0.8;
+                    ctx.stroke();
+                });
+            }
+
+            // 2. Animate Pulses
+            for (let i = pulses.length - 1; i >= 0; i--) {
+                const p = pulses[i];
+                p.progress += p.speed;
+
+                const curX = p.x + (p.targetX - p.x) * p.progress;
+                const curY = p.y + (p.targetY - p.y) * p.progress;
+
+                ctx.beginPath();
+                ctx.arc(curX, curY, 3, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = 8;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                if (p.progress >= 1.0) {
+                    if (p.currentLayer < layersConfig.length - 2) {
+                        p.currentLayer++;
+                        p.progress = 0;
+                        p.x = p.targetX;
+                        p.y = p.targetY;
+                        const nextLayer = nodes.filter(n => n.layerIdx === p.currentLayer + 1);
+                        const nextTarget = nextLayer[Math.floor(Math.random() * nextLayer.length)];
+                        p.targetX = nextTarget.x;
+                        p.targetY = nextTarget.y;
+                        p.color = layersConfig[p.currentLayer].color;
+                    } else {
+                        pulses.splice(i, 1);
+                    }
+                }
+            }
+
+            // 3. Draw Nodes (Neurons)
+            nodes.forEach(n => {
+                n.pulsePhase += 0.04;
+                const currentRadius = n.radius + Math.sin(n.pulsePhase) * 1.5;
+
+                // Outer Halo
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, currentRadius + 5, 0, Math.PI * 2);
+                ctx.fillStyle = n.color;
+                ctx.globalAlpha = 0.18;
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+
+                // Inner Circle
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, currentRadius, 0, Math.PI * 2);
+                ctx.fillStyle = "#0f172a";
+                ctx.strokeStyle = n.color;
+                ctx.lineWidth = 2.0;
+                ctx.fill();
+                ctx.stroke();
+
+                // Spark Core
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = "#ffffff";
+                ctx.fill();
+            });
+
+            // 4. Draw Layer Header Labels
+            layersConfig.forEach((l, lIdx) => {
+                const sampleNode = nodes.find(n => n.layerIdx === lIdx);
+                if (sampleNode) {
+                    ctx.textAlign = "center";
+                    ctx.font = "bold 12px 'Inter', sans-serif";
+                    ctx.fillStyle = l.color;
+                    ctx.fillText(l.name, sampleNode.x, 38);
+
+                    ctx.font = "10px 'JetBrains Mono', monospace";
+                    ctx.fillStyle = "#94a3b8";
+                    ctx.fillText(l.sub, sampleNode.x, 54);
+                }
+            });
+
+            // 5. Draw Output Labels
+            const lastLayerNodes = nodes.filter(n => n.layerIdx === layersConfig.length - 1);
+            lastLayerNodes.forEach((n, idx) => {
+                ctx.textAlign = "left";
+                ctx.font = "bold 11px 'Inter', sans-serif";
+                ctx.fillStyle = "#f8fafc";
+                ctx.fillText("──► " + outputLabels[idx], n.x + 18, n.y + 4);
+            });
+
+            requestAnimationFrame(draw);
+        }
+        draw();
+
+        // Hover interaction
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const hovered = nodes.find(n => {
+                const dist = Math.sqrt((n.x - mouseX)**2 + (n.y - mouseY)**2);
+                return dist < 15;
+            });
+
+            if (hovered) {
+                const l = layersConfig[hovered.layerIdx];
+                infoText.innerHTML = `Neuron Terpilih: <strong>${l.name}</strong> (${l.sub}) | Tensor Shape: <span class="tensor-tag">${l.tensor}</span>`;
+            }
+        });
+
+        document.getElementById('btn-toggle-pulse').addEventListener('click', (e) => {
+            isPulsing = !isPulsing;
+            e.target.classList.toggle('btn-active');
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            pulses = [];
+        });
+    </script>
+</body>
+</html>

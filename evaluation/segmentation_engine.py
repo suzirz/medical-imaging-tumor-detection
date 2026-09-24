@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import cv2
 import torch
@@ -18,12 +19,19 @@ class TumorSegmentationEngine:
         self.mm_per_px = mm_per_px
         self.device = torch.device("cpu")
         self.model = AttentionUNet(in_channels=3, out_channels=1).to(self.device)
+        self.is_trained = False
         
-        if model_checkpoint:
+        if model_checkpoint is None:
+            default_ckpt = "models_checkpoint/attention_unet_best.pth"
+            if os.path.exists(default_ckpt):
+                model_checkpoint = default_ckpt
+
+        if model_checkpoint and os.path.exists(model_checkpoint):
             try:
                 self.model.load_state_dict(torch.load(model_checkpoint, map_location=self.device))
+                self.is_trained = True
             except Exception:
-                pass
+                self.is_trained = False
         self.model.eval()
 
     def segment(

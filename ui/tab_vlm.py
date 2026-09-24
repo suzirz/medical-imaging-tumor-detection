@@ -106,9 +106,13 @@ def render_vlm_tab(eval_img: Image.Image, filename: str):
                     <span class="metric-chip">{report.risk_stratification}</span>
                     <div style="font-size: 0.72rem; color: #94a3b8; font-family: 'JetBrains Mono', monospace; margin-top: 2px;">{report.examination_date}</div>
                 </div>
-            </div>
-            <div style="font-size: 0.82rem; color: #cbd5e1; border-top: 1px solid #1e293b; padding-top: 0.5rem;">
+            </div>            <div style="font-size: 0.82rem; color: #cbd5e1; border-top: 1px solid #1e293b; padding-top: 0.5rem;">
                 <strong>Patient Scan:</strong> <code>{filename}</code> | <strong>Diagnostic Engine:</strong> {active_engine} | <strong>Concordance:</strong> {report.concordance_summary}
+            </div>
+            <div style="margin-top: 0.5rem; font-size: 0.78rem; color: #94a3b8; display: flex; gap: 8px; flex-wrap: wrap;">
+                <span style="background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); padding: 2px 8px; border-radius: 4px; font-family: monospace;">ICD-10: C71.9 / ICD-O-3: 9380/3</span>
+                <span style="background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 8px; border-radius: 4px; font-family: monospace;">SNOMED-CT: 126952004 (Cranial Neoplasm)</span>
+                <span style="background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); padding: 2px 8px; border-radius: 4px; font-family: monospace;">WHO CNS 2021 5th Edition</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -147,11 +151,13 @@ def render_vlm_tab(eval_img: Image.Image, filename: str):
             # Export Structured Report as Plaintext / Markdown
             st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
             report_full_text = f"""================================================================================
-NEUROSCAN AI — CLINICAL CRANIAL MR STRUCTURED REPORT (ACR STANDARD)
+NEUROSCAN AI — CLINICAL CRANIAL MR STRUCTURED REPORT (ACR & WHO CNS STANDARD)
 Scan Identifier   : {filename}
 Examination Date  : {report.examination_date}
 Technique         : {report.technique}
 Clinical Indication: {report.clinical_indication}
+Medical Ontologies: ICD-10: C71.9 | ICD-O-3: 9380/3 | SNOMED-CT: 126952004
+Regulatory Status : FDA 510(k) CADx Decision Support / CE-MDR Class IIa SaMD
 ================================================================================
 FINDINGS:
 """

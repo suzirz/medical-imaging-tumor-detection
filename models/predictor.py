@@ -14,14 +14,28 @@ class PredictionResult:
     confidence_score: float
     recommended_clinical_action: str
     probabilities: Dict[str, float]
+    icd_code: str = "ICD-10: C71.9 / ICD-O-3: 9380/3"
+    snomed_code: str = "SNOMED-CT: 126952004"
 
 class TumorPredictor:
     """
     Modul inferensi independen (deep module).
     Menyembunyikan detail: preprocessing tensor, normalisasi channel,
-    evaluasi forward model, dan pemetaan rekomendasi klinis.
+    evaluasi forward model, dan pemetaan rekomendasi klinis serta ontologi ICD/SNOMED.
     """
     CLASS_NAMES = ("Normal", "Glioma", "Meningioma", "Tumor Hipofisis")
+    ICD_CODES = {
+        0: "ICD-10: Z00.00 (Pemeriksaan Medis Rutin Tanpa Kelainan)",
+        1: "ICD-10: C71.9 / ICD-O-3: 9380/3 (Neoplasma Ganas Otak / Glioma)",
+        2: "ICD-10: D32.9 / ICD-O-3: 9530/0 (Neoplasma Jinak Selaput Otak / Meningioma)",
+        3: "ICD-10: D35.2 / ICD-O-3: 8272/0 (Neoplasma Jinak Kelenjar Hipofisis)"
+    }
+    SNOMED_CODES = {
+        0: "SNOMED-CT: 17621005 (Normal Clinical Finding)",
+        1: "SNOMED-CT: 126952004 (Neoplasm of Brain / Malignant Glioma)",
+        2: "SNOMED-CT: 1947003 (Meningioma of Brain)",
+        3: "SNOMED-CT: 254956000 (Pituitary Adenoma)"
+    }
 
     def __init__(self, model: torch.nn.Module, device: torch.device):
         self.model = model
@@ -69,10 +83,15 @@ class TumorPredictor:
 
         prob_dict = {name: float(probs[i]) for i, name in enumerate(self.CLASS_NAMES)}
 
+        icd = self.ICD_CODES.get(pred_id, "ICD-10: R90.82")
+        snomed = self.SNOMED_CODES.get(pred_id, "SNOMED-CT: 404684003")
+
         return PredictionResult(
             predicted_class=label,
             class_id=pred_id,
             confidence_score=confidence,
             recommended_clinical_action=action,
-            probabilities=prob_dict
+            probabilities=prob_dict,
+            icd_code=icd,
+            snomed_code=snomed
         )

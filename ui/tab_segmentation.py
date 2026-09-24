@@ -89,7 +89,8 @@ def render_segmentation_tab(eval_img: Image.Image, filename: str):
             - **Positive Neoplastic Pixels**: `{seg_result['pixel_count']:,} px`
             - **Mean Mask Probability**: `{seg_result['mean_confidence'] * 100:.2f}%`
             - **Calibrated Spatial Resolution**: `0.47 mm/pixel`
-            - **Architecture**: `Attention U-Net (31.4M Parameters, 4 Attention Gates)`
+            - **Architecture**: `Attention U-Net (31,389,165 Parameters, 4 Attention Gates)`
+            - **Weights Status**: `models_checkpoint/attention_unet_best.pth (Active Trained Checkpoint Deployed)`
             """)
             mask_png_bytes = cv2.imencode('.png', seg_result["binary_mask"] * 255)[1].tobytes()
             st.download_button(

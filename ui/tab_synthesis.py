@@ -1,6 +1,7 @@
 """
 Tab: Virtual Contrast Synthesis & Cross-Modality Translation.
-Simulates Gadolinium contrast uptake and T2-FLAIR edema mapping without intravenous injection.
+Simulates Gadolinium contrast uptake and T2-FLAIR edema mapping without intravenous injection
+using Deep Generative Neural Translation and Extended Tofts Pharmacokinetic Modeling.
 """
 import streamlit as st
 from PIL import Image
@@ -14,29 +15,40 @@ def render_synthesis_tab(eval_img: Image.Image, filename: str):
     """
     st.markdown("""
     <div style="margin-bottom: 1.25rem;">
-        <span class="header-badge">Generative Deep Learning · Virtual Gadolinium Physics</span>
+        <span class="header-badge">Generative Deep Learning · Virtual Gadolinium & Extended Tofts</span>
         <h2 style="font-size: 1.4rem; font-weight: 700; color: #f8fafc; margin: 0.35rem 0 0.15rem 0;">Virtual Contrast Synthesis & Cross-Modality Translation</h2>
-        <p style="font-size: 0.85rem; color: #94a3b8; margin: 0;">Generates Virtual T1-Contrast (T1ce) and Virtual T2-FLAIR sequences directly from unenhanced T1-weighted MRI—eliminating the need for invasive intravenous Gadolinium injection in patients with renal failure or acute allergy risk.</p>
+        <p style="font-size: 0.85rem; color: #94a3b8; margin: 0;">Generates Virtual T1-Contrast (T1ce) and Virtual T2-FLAIR sequences directly from unenhanced T1-weighted MRI via Deep Generative Residual Translation and Tofts Pharmacokinetic Modeling—eliminating the need for invasive intravenous Gadolinium injection in patients with renal impairment (low eGFR) or acute allergy risk.</p>
     </div>
     """, unsafe_allow_html=True)
 
     # Deduce active pathology from session state
     last_analysis = st.session_state.get("last_analysis", None)
+    default_pathology = "Meningioma"
     if last_analysis and last_analysis.get("scan_id") == filename:
-        pathology = last_analysis.get("pathology", "Meningioma")
-        has_lesion = last_analysis.get("is_tumor", True)
+        default_pathology = last_analysis.get("pathology", "Meningioma")
     else:
-        pathology = "Meningioma" if "meningioma" in filename.lower() else (
-            "Glioma" if "glioma" in filename.lower() else (
-                "Pituitary Adenoma" if "pituitary" in filename.lower() else (
-                    "Normal Tissue" if "notumor" in filename.lower() else "Meningioma"
-                )
-            )
-        )
-        has_lesion = "normal" not in pathology.lower()
+        if "meningioma" in filename.lower(): default_pathology = "Meningioma"
+        elif "glioma" in filename.lower(): default_pathology = "Glioma / Glioblastoma"
+        elif "pituitary" in filename.lower(): default_pathology = "Pituitary Adenoma"
+        elif "notumor" in filename.lower(): default_pathology = "Normal Tissue"
+
+    pathology_options = [
+        "Meningioma",
+        "Glioma / Glioblastoma",
+        "Pituitary Adenoma",
+        "Cranial Metastasis (Secondary)",
+        "Vestibular Schwannoma (CPA Cistern)",
+        "Medulloblastoma (Posterior Fossa)",
+        "Normal Tissue (Intact BBB)"
+    ]
+    def_idx = 0
+    for idx, opt in enumerate(pathology_options):
+        if default_pathology.lower() in opt.lower():
+            def_idx = idx
+            break
 
     # Controls
-    ccol1, ccol2 = st.columns([1.5, 1])
+    ccol1, ccol2 = st.columns([1.2, 1.2])
     with ccol1:
         dose_factor = st.slider(
             "Simulated Gadolinium Contrast Dose Multiplier",
@@ -47,14 +59,19 @@ def render_synthesis_tab(eval_img: Image.Image, filename: str):
             help="Standard clinical dose corresponds to 1.0x (0.1 mmol/kg body weight). Double dose (2.0x) is often used for subtle metastatic screening."
         )
     with ccol2:
-        st.markdown(f"**Target Pathology Dynamics:** `{pathology}`")
-        st.caption(f"Active Scan: {filename}")
+        selected_pathology = st.selectbox(
+            "Pathology Hemodynamic Profile (7-Class Taxonomy)",
+            pathology_options,
+            index=def_idx
+        )
+
+    has_lesion = "normal" not in selected_pathology.lower()
 
     synthesizer = VirtualContrastSynthesizer()
     syn_result = synthesizer.synthesize(
         np.array(eval_img),
         dose_multiplier=dose_factor,
-        pathology=pathology,
+        pathology=selected_pathology,
         has_lesion=has_lesion
     )
 
@@ -71,9 +88,11 @@ def render_synthesis_tab(eval_img: Image.Image, filename: str):
         st.image(syn_result["subtraction_map"], caption="4. Subtraction Map (ΔSI Uptake)", width='stretch')
 
     # Perfusion Metrics
-    st.markdown("#### Quantitative Blood-Brain Barrier (BBB) & Perfusion Dynamics")
+    st.markdown("#### Quantitative Blood-Brain Barrier (BBB) & Tofts Pharmacokinetics")
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("BBB Permeability Index (Ktrans)", f"{syn_result['bbb_permeability_index']:.3f}", delta="Disrupted Barrier" if syn_result['bbb_permeability_index'] > 0.5 else "Intact")
-    m2.metric("Enhancement Pattern", syn_result["perfusion_pattern"][:28] + "...")
-    m3.metric("Perilesional Edema Area", syn_result["edema_volume_estimate"])
+    m1.metric("Ktrans (Volume Transfer)", f"{syn_result['k_trans']:.3f} min⁻¹", delta="Disrupted BBB" if syn_result['k_trans'] > 0.15 else "Intact Baseline")
+    m2.metric("ve (Interstitial Fraction)", f"{syn_result['v_e']:.2f}")
+    m3.metric("Vasogenic Edema Volume", syn_result["edema_volume_estimate"])
     m4.metric("Simulated Contrast Equiv", syn_result["dose_administered"])
+
+    st.caption(f"Active Kinetic Engine: `{syn_result['pharmacokinetic_model']}` | Perfusion: `{syn_result['perfusion_pattern']}`")

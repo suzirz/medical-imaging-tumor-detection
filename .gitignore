@@ -21,9 +21,8 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Project memory & internal docs
+# Project memory & internal logs
 CHAT.md
-docs/
 
 # Large Datasets & Archives
 data/
