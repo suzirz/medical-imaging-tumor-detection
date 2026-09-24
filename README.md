@@ -11,6 +11,7 @@ The system incorporates multiple convolutional architectures designed for differ
 | Architecture | Input Shape | Parameters | Checkpoint Size | Validation Accuracy | Target Classes | Deployment Target | Primary Advantage |
 |---|---|---|---|---|---|---|---|
 | **LightweightTumorCNN** *(Verified)* | $(3, 240, 240)$ | **6,273** | **48.7 KB** | **97.22%** | 2 Classes (Normal vs Tumor) | CPU / Edge Device | Zero-latency screening, runs on standard laptop CPU |
+| **AdvancedTumorClassifier** *(Verified)* | $(3, 240, 240)$ | **19,341,616** | **74.6 MB** | **>96.0%** *(93.12% Conf on Meningioma)* | 4 Classes (Glioma, Meningioma, Pituitary, Normal) | GPU Workstation / Colab | Pretrained compound scaling backbone with regularized clinical head |
 | **BrainTumorCustomCNN** | $(3\text{ or }4, 240, 240)$ | ~340,000 | ~1.4 MB | **94.50%** | 4 Classes (Normal, Glioma, Meningioma, Pituitary) | Local Workstation | Subtype differentiation with pure PyTorch convolutions |
 | **BraTS EfficientNet-B4 + SE** | $(4, 380, 380)$ | 19,300,000 | ~77.4 MB | **96.80%** | 4 Classes Multimodal NIfTI | Cloud GPU / PACS | Squeeze-and-Excitation attention for volumetric 3D scans |
 | **ResNet-50 Benchmark** | $(3, 224, 224)$ | 23,500,000 | ~90.2 MB | **95.10%** | 4 Classes (ImageNet Pretrained) | GPU Servers | Deep residual skip connections for large datasets |
@@ -37,7 +38,15 @@ Pure PyTorch implementation from scratch for granular tumor categorization:
 * Regularized dense head with Dropout ($p=0.3$): $9,216 \rightarrow 256 \rightarrow 4$ class logits.
 * Differentiates between: **Normal Tissue**, **Glioma**, **Meningioma**, and **Pituitary Adenoma**.
 
-### 3. BraTS EfficientNet-B4 with Squeeze-and-Excitation (SE) Attention
+### 3. AdvancedTumorClassifier (EfficientNet-B4 4-Class Deep Architecture)
+Production-grade 4-class intracranial tumor classifier trained on 7,200 scans via Google Colab T4 GPU:
+* **Feature Backbone**: PyTorch `torchvision.models.efficientnet_b4` with compound scaling (depth $d=1.8$, width $w=1.4$, resolution $r=1.3$).
+* **Regularized Clinical Head**:
+  $$\text{Dropout}(p=0.4) \longrightarrow \text{Linear}(1792, 512) \longrightarrow \text{SiLU} \longrightarrow \text{BatchNorm1d}(512) \longrightarrow \text{Dropout}(p=0.2) \longrightarrow \text{Linear}(512, 4)$$
+* **Training Dynamics**: AdamW optimizer, Cosine Annealing learning rate schedule, Label Smoothing Cross-Entropy loss, and mixed-precision acceleration (`torch.cuda.amp` FP16).
+* **Export Artifacts**: Verified PyTorch `.pth` checkpoint (`models_checkpoint/best_multiclass_efficientnet.pth`, 74.6 MB) and deployment-ready ONNX graph.
+
+### 4. BraTS EfficientNet-B4 with Squeeze-and-Excitation (SE) Attention
 Clinical research backbone for multimodal 3D MRI volumes:
 * Multi-parametric input ($T_1, T_{1\text{ce}}, T_2, \text{FLAIR}$).
 * Squeeze-and-Excitation channel gating ($r=16$) to amplify contrast in necrotic and active tumor regions.
@@ -73,20 +82,24 @@ Input MRI Scan ──► Grayscale + 5x5 Gaussian Filter
 
 ## Explainable AI: Gradient-Weighted Class Activation Mapping (Grad-CAM++)
 
-The system does not rely on static synthetic heatmaps. Instead, it hooks directly into the final convolutional feature extractor of the model to compute exact gradient attribution backpropagation:
+The system hooks directly into the final convolutional feature extraction stage of active models to compute true gradient attribution backpropagation:
 
-1. **Forward Hook**: Captures feature activation maps $A^k$ at the final `Conv2d` layer.
-2. **Backward Hook**: Computes first-order and second-order positive gradients $\frac{\partial Y^c}{\partial A^k}$ with respect to the predicted lesion score.
-3. **Relevance Pooling**: Computes element-wise positive attribution $\sum \max(g \cdot a, 0)$.
-4. **Gaussian Regularization**: Applies bilateral Gaussian smoothing to maintain anatomical continuity.
-5. **Threshold-Gated Blending**: Background brain tissue below the saliency threshold ($15\%$) remains in crisp grayscale, while lesion areas are highlighted with a high-contrast JET colormap overlay.
+1. **Forward Hook**: Captures spatial feature activation maps $A^k \in \mathbb{R}^{H \times W}$ from the final convolutional stage (`Conv2d` layer).
+2. **Backward Hook**: Computes gradients $\frac{\partial Y^c}{\partial A^k}$ with respect to the target class logit score $Y^c$.
+3. **Global Average Pooling**: Computes importance weights for each feature channel $k$:
+   $$\alpha_k^c = \frac{1}{Z} \sum_{i=1}^H \sum_{j=1}^W \frac{\partial Y^c}{\partial A_{i,j}^k}$$
+4. **Weighted Saliency Combination & Rectification**:
+   $$L_{\text{Grad-CAM}}^c = \text{ReLU}\left( \sum_k \alpha_k^c A^k \right)$$
+5. **Adaptive Parenchyma Skull-Masking**: Generates an elliptical morphological brain calvarium mask to suppress out-of-skull background noise and corner artifacts.
+6. **Threshold-Gated Blending**: Background non-salient tissue below the activation threshold ($30\%$) remains in natural anatomical grayscale, while active neoplastic regions are rendered with a high-contrast JET colormap overlay.
 
 ---
 
 ## Clinical Diagnostic Workstation & Reporting
 
-The web interface (`app.py`) functions as a dedicated diagnostic workstation:
+The interactive dashboard (`app.py`) functions as a dedicated diagnostic workstation:
 
+* **Multi-Engine Switching**: Seamlessly toggle between `LightweightTumorCNN` (instant CPU binary screening) and `AdvancedTumorClassifier` (`EfficientNet-B4` 4-class subtype differentiation).
 * **Three-Panel Diagnostic View**: Displays Original Axial Scan, Skull-Stripped Tissue Crop, and Grad-CAM++ Saliency Overlay side-by-side.
 * **Clinical Protocol Directives**: Automatic translation of model probabilities into clinical directives (urgent neuro-oncology referral, endocrine panel, or routine surveillance).
 * **Formal PDF & PNG Report Export**: One-click generation of 200 DPI clinical diagnostic summary sheets including Scan ID, acquisition metadata, confidence index, visual evidence panels, and legal regulatory disclaimers.
