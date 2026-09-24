@@ -20,3 +20,8 @@ ENV/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Project memory & internal docs
+CHAT.md
+docs/
+
