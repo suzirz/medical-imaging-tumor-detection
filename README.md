@@ -1,5 +1,9 @@
 # NeuroScan: Brain Tumor MRI Detection & Clinical Decision Support
 
+> [!CAUTION]
+> **RESEARCH & EDUCATIONAL PROTOTYPE ONLY · NOT FOR CLINICAL USE**
+> NeuroScan is an academic feasibility prototype and software engineering reference implementation. It is **NOT** a cleared medical device and is **NOT intended for primary clinical diagnosis, surgical navigation, patient management, or clinical decision-making**. It has not received clearance or approval from the US FDA (510(k)), CE-MDR Notified Bodies, or national health authorities. All model outputs, segmentations, and reports require verification by qualified medical professionals.
+
 NeuroScan is an architectural reference, educational, and feasibility prototype for Software as a Medical Device (SaMD) in brain tumor MRI analysis. It demonstrates an end-to-end clinical workflow connecting deep learning classification and attention segmentation with DICOM Part 10 inspection, automated ACR radiology reporting, content-based case retrieval, and surgical decision support.
 
 ---

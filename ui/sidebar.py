@@ -32,3 +32,11 @@ def render_patient_sidebar():
             if st.button("Clear Session History", use_container_width=True):
                 st.session_state.diagnostic_history = []
                 st.rerun()
+
+        st.markdown("---")
+        st.markdown("""
+        <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 10px; font-size: 0.72rem; color: #fca5a5; line-height: 1.4;">
+            <strong>⚠️ Research Prototype Only</strong><br>
+            Not cleared for clinical diagnosis, patient triage, or surgical decision-making. All outputs require manual radiologist verification.
+        </div>
+        """, unsafe_allow_html=True)
