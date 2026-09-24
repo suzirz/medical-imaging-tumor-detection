@@ -68,6 +68,15 @@ Ultra-dense convolutional network specialized in preserving fine tumor margins a
 * **Classification Head**: Global Average Pooling with $1024$-dimensional bottleneck features connected to a regularized linear head ($1024 \rightarrow 256 \rightarrow 4$).
 * **Parameter Scale**: $7.98\text{M}$ parameters ($~31\text{ MB}$).
 
+### 7. Multi-Model Consensus & Inter-Model Discrepancy Analyzer
+Clinical decision arbitration engine executing parallel inference across three complementary deep learning paradigms:
+* **Soft-Voting Ensemble**: Integrates probability distributions from EfficientNet-B4 (compound CNN), ViT-B/16 (self-attention), and DenseNet-121 (feature reuse):
+  $$\bar{P}(y = c \mid x) = \frac{1}{M} \sum_{m=1}^{M} P_m(y = c \mid x)$$
+* **Automated Concordance Rating**: Categorizes diagnostic agreement into **Unanimous** ($100\%$ agreement, 3/3 models), **Majority** ($66.7\%$ agreement, 2/3 models), or **Divergent** (discrepancy alert).
+* **Inter-Model Discrepancy Index ($\bar{\sigma}$)**: Evaluates the standard deviation of predicted class probabilities across architectures as an objective proxy for model uncertainty without requiring ground-truth labels.
+* **Dissenting Architecture Identification**: Pinpoints specific divergent predictions between Convolutional and Transformer features, automatically issuing an urgent senior neuroradiologist second-opinion directive when divergence is detected.
+* **Total Combined Capacity**: $113.8\text{M}$ parameters ($~435\text{ MB}$).
+
 ---
 
 ## Preprocessing: Skull Stripping via Extreme Contour Extraction
