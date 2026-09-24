@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-class HabibBrainTumorCNN(nn.Module):
+class LightweightTumorCNN(nn.Module):
     """
-    Direct PyTorch implementation of MohamedAliHabib's Keras CNN architecture:
+    Lightweight Convolutional Neural Network (CNN) for fast brain tumor detection:
     - Input: (3, 240, 240)
     - ZeroPadding2d(2, 2)
     - Conv2d(3 -> 32, kernel_size=7, stride=1) + BatchNorm2d + ReLU
@@ -14,7 +14,7 @@ class HabibBrainTumorCNN(nn.Module):
       or (6272 -> 4) for multi-class classification.
     """
     def __init__(self, num_classes: int = 2):
-        super(HabibBrainTumorCNN, self).__init__()
+        super(LightweightTumorCNN, self).__init__()
         self.num_classes = num_classes
 
         self.features = nn.Sequential(
@@ -33,7 +33,6 @@ class HabibBrainTumorCNN(nn.Module):
         )
 
         # Flatten & Dense Classifier
-        # After two 4x4 pools from ~240x240, output spatial dimension is (15, 15) or (14, 14) depending on padding
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d((14, 14)),
             nn.Flatten(),

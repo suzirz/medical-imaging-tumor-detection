@@ -4,8 +4,7 @@ from PIL import Image
 
 def crop_brain_contour(image: np.ndarray, plot: bool = False) -> np.ndarray:
     """
-    Crops the brain region from an MRI scan image based on contour detection
-    (as implemented by MohamedAliHabib).
+    Crops the brain region from an MRI scan image based on contour detection.
     
     Steps:
     1. Convert to Grayscale & Gaussian Blur
@@ -13,7 +12,6 @@ def crop_brain_contour(image: np.ndarray, plot: bool = False) -> np.ndarray:
     3. Find the extreme contours of the brain (top, bottom, left, right)
     4. Crop strictly to the brain area, eliminating black background padding
     """
-    # 1. Convert to grayscale if RGB
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     else:
@@ -47,7 +45,7 @@ def crop_brain_contour(image: np.ndarray, plot: bool = False) -> np.ndarray:
 
 def preprocess_mri_240(image: Image.Image) -> np.ndarray:
     """
-    Standard preprocessing matching MohamedAliHabib's pipeline:
+    Standard preprocessing:
     Crop Brain Contour -> Resize to (240, 240, 3) -> Normalize to [0, 1].
     """
     img_np = np.array(image.convert("RGB"))

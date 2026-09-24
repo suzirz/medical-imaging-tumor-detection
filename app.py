@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import cv2
 
-from models.habib_cnn import HabibBrainTumorCNN
+from models.lightweight_cnn import LightweightTumorCNN
 from models.custom_nn import BrainTumorCustomCNN
 from models.efficientnet_tumor_classifier import BrainTumorClassifier
 from preprocessing.contour_cropper import crop_brain_contour, preprocess_mri_240
@@ -20,7 +20,7 @@ st.set_page_config(
 
 st.title("🧠 Brain Tumor Detection System & Pipeline")
 st.markdown("""
-Aplikasi deteksi tumor otak berbasis CNN dengan implementasi algoritma **Brain Contour Cropping (MohamedAliHabib)**, 
+Aplikasi deteksi tumor otak berbasis CNN dengan implementasi algoritma **Brain Contour Cropping**, 
 inspeksi arsitektur Neural Network, serta Grad-CAM++ Explainability.
 """)
 
@@ -30,11 +30,11 @@ tabs = st.tabs([
     "🩺 3. Uji Deteksi Scan Medis"
 ])
 
-# ================= TAB 1: CONTOUR CROPPING (MOHAMEDALIHABIB METHOD) =================
+# ================= TAB 1: CONTOUR CROPPING =================
 with tabs[0]:
     st.subheader("Algoritma Pemotongan Kontur Otak (Brain Contour Cropping)")
     st.markdown("""
-    Metode dari repositori **MohamedAliHabib**:
+    Metode Preprocessing:
     1. Mengubah citra ke Grayscale dan Gaussian Blur (5x5).
     2. Threshold biner & operasi morfologi (Erode + Dilate).
     3. Mencari kontur terluar ekstrem (kiri, kanan, atas, bawah).
@@ -47,7 +47,7 @@ with tabs[0]:
         # Generate sample brain MRI with padding
         base_canvas = np.zeros((300, 300, 3), dtype=np.uint8)
         cv2.ellipse(base_canvas, (150, 150), (90, 110), 0, 0, 360, (180, 180, 180), -1)
-        cv2.circle(base_canvas, (180, 130), 25, (245, 245, 245), -1) # mock tumor
+        cv2.circle(base_canvas, (180, 130), 25, (245, 245, 245), -1)
         
         sample_file = st.file_uploader("Upload Scan MRI (.png, .jpg):", type=["png", "jpg", "jpeg"], key="crop_uploader")
         if sample_file:
@@ -55,13 +55,13 @@ with tabs[0]:
         else:
             input_image = base_canvas
 
-        st.image(input_image, caption=f"Original MRI Image (Shape: {input_image.shape})", use_container_width=True)
+        st.image(input_image, caption=f"Original MRI Image (Shape: {input_image.shape})", width='stretch')
 
     with col2:
         st.write("#### Hasil Ekstraksi Kontur & Crop")
         cropped_result = crop_brain_contour(input_image)
         resized_240 = cv2.resize(cropped_result, (240, 240))
-        st.image(resized_240, caption=f"Cropped & Resized to (240, 240, 3)", use_container_width=True)
+        st.image(resized_240, caption=f"Cropped & Resized to (240, 240, 3)", width='stretch')
         st.success(f"Berhasil memangkas margin hitam! Dimensi akhir siap masuk Neural Network: `{resized_240.shape}`")
 
 # ================= TAB 2: INSPEKSI ARSITEKTUR =================
@@ -71,16 +71,16 @@ with tabs[1]:
     model_opt = st.selectbox(
         "Pilih Model untuk Diinspeksi:",
         [
-            "MohamedAliHabib CNN (Fast 2-Pool Architecture)",
+            "LightweightTumorCNN (Fast 2-Pool Binary Architecture)",
             "BrainTumorCustomCNN (4-Layer Deep Pure CNN)",
             "BraTS EfficientNet-B4 + SE Attention"
         ]
     )
 
-    if "MohamedAliHabib" in model_opt:
-        m = HabibBrainTumorCNN(num_classes=2)
+    if "LightweightTumorCNN" in model_opt:
+        m = LightweightTumorCNN(num_classes=2)
         total_p = sum(p.numel() for p in m.parameters())
-        st.info(f"**MohamedAliHabib CNN**: Model ringan dengan 2 pooling layer (f=4, s=4). Total Parameter: `{total_p:,}`")
+        st.info(f"**LightweightTumorCNN**: Model ringan dengan 2 pooling layer (f=4, s=4). Total Parameter: `{total_p:,}`")
         st.markdown("""
         ```text
         Input (3, 240, 240)
@@ -132,19 +132,18 @@ with tabs[2]:
             eval_img = Image.open(test_file).convert("RGB")
         else:
             eval_img = Image.fromarray(base_canvas)
-        st.image(eval_img, caption="Citra Input", use_container_width=True)
+        st.image(eval_img, caption="Citra Input", width='stretch')
 
     with col_u2:
         st.write("#### Jalankan Inferensi Model")
-        chosen_net = st.radio("Pilih Engine Model:", ["MohamedAliHabib CNN (Binary)", "Multimodal Custom CNN (4-Class)"])
+        chosen_net = st.radio("Pilih Engine Model:", ["LightweightTumorCNN (Binary)", "Multimodal Custom CNN (4-Class)"])
 
         if st.button("🚀 Jalankan Analisis"):
-            if "MohamedAliHabib" in chosen_net:
-                # Preprocess ala Habib (240x240)
+            if "LightweightTumorCNN" in chosen_net:
                 norm_img = preprocess_mri_240(eval_img)
-                tensor_in = torch.from_numpy(norm_img).permute(2, 0, 1).unsqueeze(0).float() # (1, 3, 240, 240)
+                tensor_in = torch.from_numpy(norm_img).permute(2, 0, 1).unsqueeze(0).float()
                 
-                net = HabibBrainTumorCNN(num_classes=2)
+                net = LightweightTumorCNN(num_classes=2)
                 net.eval()
                 with torch.no_grad():
                     logits = net(tensor_in)
@@ -159,7 +158,6 @@ with tabs[2]:
                 st.progress(prob_tumor, text=f"Tumor Probability: {prob_tumor*100:.1f}%")
 
             else:
-                # 4-class prediction
                 np_arr = np.array(eval_img)
                 resized = cv2.resize(np_arr, (380, 380))
                 ch4 = np.zeros((1, 4, 380, 380), dtype=np.float32)
@@ -183,4 +181,4 @@ with tabs[2]:
             mock_tensor = torch.randn(1, 4, 240, 240)
             heatmap = vis.generate_heatmap(mock_tensor)
             overlay = vis.overlay_on_mri(cv2.resize(np.array(eval_img), (240, 240))[:, :, 0], heatmap)
-            st.image(overlay, caption="Grad-CAM++ Spatial Heatmap Overlay", use_container_width=True)
+            st.image(overlay, caption="Grad-CAM++ Spatial Heatmap Overlay", width='stretch')

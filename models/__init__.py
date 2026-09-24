@@ -1,12 +1,12 @@
 from .efficientnet_tumor_classifier import BrainTumorClassifier, SqueezeExcitationBlock, MultiClassFocalLoss
 from .custom_nn import BrainTumorCustomCNN
-from .habib_cnn import HabibBrainTumorCNN
+from .lightweight_cnn import LightweightTumorCNN
 from .predictor import TumorPredictor, PredictionResult
 
 __all__ = [
     "BrainTumorClassifier",
     "BrainTumorCustomCNN",
-    "HabibBrainTumorCNN",
+    "LightweightTumorCNN",
     "SqueezeExcitationBlock",
     "MultiClassFocalLoss",
     "TumorPredictor",
