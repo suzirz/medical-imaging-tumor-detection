@@ -61,33 +61,39 @@ class GradCAMVisualizer:
             g = self.gradients.detach()
             a = self.activations.detach()
 
-            # Element-wise positive gradient-activation attribution
-            saliency = torch.sum(torch.clamp(g * a, min=0), dim=1, keepdim=True)
-            cam = saliency.squeeze().cpu().numpy()
+            # Global average pooling of gradients across spatial dimensions (true Grad-CAM)
+            weights = torch.mean(g, dim=(2, 3), keepdim=True)
+            # Weighted combination of forward activation maps with ReLU
+            cam = torch.sum(weights * a, dim=1, keepdim=True)
+            cam = torch.clamp(cam, min=0).squeeze().cpu().numpy()
 
-            if cam.max() > 0:
-                cam = cam / cam.max()
+            if cam.max() > cam.min():
+                cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+            else:
+                cam = np.zeros_like(cam)
+
+            # Resize to input spatial resolution
+            cam_resized = cv2.resize(cam.astype(np.float32), (w, h))
 
             # Gaussian smoothing for continuous clinical gradient visualization
-            smoothed = cv2.GaussianBlur(cam.astype(np.float32), (25, 25), 9)
-            if smoothed.max() > 0:
-                smoothed = smoothed / smoothed.max()
+            smoothed = cv2.GaussianBlur(cam_resized, (31, 31), 11)
+            if smoothed.max() > smoothed.min():
+                smoothed = (smoothed - smoothed.min()) / (smoothed.max() - smoothed.min() + 1e-8)
 
-            heatmap = cv2.resize(smoothed, (w, h))
-            return heatmap
+            return smoothed
         else:
             if tensor.grad is not None:
                 inp_g = tensor.grad[0].abs().mean(dim=0).detach().cpu().numpy()
-                smoothed = cv2.GaussianBlur(inp_g.astype(np.float32), (25, 25), 9)
-                if smoothed.max() > 0:
-                    smoothed = smoothed / smoothed.max()
+                smoothed = cv2.GaussianBlur(inp_g.astype(np.float32), (31, 31), 11)
+                if smoothed.max() > smoothed.min():
+                    smoothed = (smoothed - smoothed.min()) / (smoothed.max() - smoothed.min() + 1e-8)
                 return cv2.resize(smoothed, (w, h))
             return np.zeros((h, w), dtype=np.float32)
 
-    def overlay_on_mri(self, mri_slice, heatmap: np.ndarray, alpha: float = 0.55, threshold: float = 0.15) -> np.ndarray:
+    def overlay_on_mri(self, mri_slice, heatmap: np.ndarray, alpha: float = 0.65, threshold: float = 0.30) -> np.ndarray:
         """
         Blends heatmap with MRI scan. Only pixels above threshold show color JET,
-        leaving non-salient brain tissue in clear grayscale.
+        leaving non-salient brain tissue in clear grayscale. Masks out exterior black padding.
         """
         if mri_slice.dtype != np.uint8:
             norm = (mri_slice - mri_slice.min()) / (mri_slice.max() - mri_slice.min() + 1e-8)
@@ -104,8 +110,19 @@ class GradCAMVisualizer:
         if heatmap.shape[:2] != (h, w):
             heatmap = cv2.resize(heatmap, (w, h))
 
+        # Brain parenchyma mask to exclude dark scanner backgrounds and corners
+        gray = cv2.cvtColor(mri_rgb, cv2.COLOR_RGB2GRAY)
+        _, brain_mask = cv2.threshold(gray, 20, 255, cv2.THRESH_BINARY)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+        brain_mask = cv2.morphologyEx(brain_mask, cv2.MORPH_CLOSE, kernel)
+        brain_mask_f = brain_mask.astype(np.float32) / 255.0
+
+        # Mask heatmap to stay strictly within brain tissue
+        masked_heatmap = heatmap * brain_mask_f
+
         # Suppress background noise below threshold
-        active_map = np.clip((heatmap - threshold) / (1.0 - threshold + 1e-8), 0.0, 1.0)
+        active_map = np.clip((masked_heatmap - threshold) / (1.0 - threshold + 1e-8), 0.0, 1.0)
+        active_map = active_map * brain_mask_f
 
         heatmap_color = cv2.applyColorMap(np.uint8(255 * active_map), cv2.COLORMAP_JET)
         heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
