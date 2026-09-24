@@ -136,10 +136,18 @@ Interactive OpenAPI documentation is available at `http://localhost:8000/docs`.
 
 ### 5. Cloud GPU Training (Google Colab)
 
-For training the full 3D multimodal EfficientNet-B4 on BraTS 2023 NIfTI volumes:
-1. Open [Google Colab](https://colab.research.google.com).
-2. Upload `notebooks/brats_efficientnet_colab.ipynb`.
-3. Select **GPU (T4)** runtime and run all cells.
+Accelerate complex deep learning architectures (EfficientNet-B4, ResNet-50) using free NVIDIA T4 GPU runtime on Google Colab:
+
+| Notebook | Focus | Scans / Modal | Direct Launch |
+|---|---|---|---|
+| **Advanced 4-Class Pipeline** (`advanced_brain_tumor_colab.ipynb`) | 4-class Intracranial Classifier, FP16, Grad-CAM++, ONNX | 7,200 MRI Scans | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/suzirz/medical-imaging-tumor-detection/blob/main/notebooks/advanced_brain_tumor_colab.ipynb) |
+| **BraTS Multimodal 3D** (`brats_efficientnet_colab.ipynb`) | 4-Channel 3D Axial Slices, NIfTI preprocessor | T1, T1ce, T2, FLAIR | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/suzirz/medical-imaging-tumor-detection/blob/main/notebooks/brats_efficientnet_colab.ipynb) |
+
+**Workflow in Colab:**
+1. Click the **Open in Colab** badge above.
+2. Select **Runtime -> Change runtime type -> T4 GPU**.
+3. Run all cells (**Ctrl + F9**). The notebook will automatically download the dataset, train with mixed precision, plot metrics, compute Grad-CAM++, and download the trained `.pth` and `.onnx` models directly to your computer.
+4. Place the downloaded `.pth` file inside `models_checkpoint/` in your local project directory. Streamlit will auto-detect the new weights.
 
 ---
 
