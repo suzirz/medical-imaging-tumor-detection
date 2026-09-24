@@ -95,14 +95,27 @@ The system hooks directly into the final convolutional feature extraction stage 
 
 ---
 
+## Quantitative Lesion Morphometry & Digital Calipers (PACS-Grade)
+
+The pipeline integrates automated morphometric feature extraction to assist neurosurgical planning:
+
+![PACS Digital Calipers](assets/caliper_preview.png)
+
+* **Orthogonal Diameter Measurements**: Computes the longest diameter (Major Axis) and perpendicular width (Minor Axis) in millimeters ($0.47\text{ mm/px}$ calibrated Field of View).
+* **Cross-Sectional Area & Tumor Burden**: Evaluates the 2D surface area ($\text{cm}^2$) and computes the volumetric ratio of neoplastic tissue relative to total intracranial brain parenchyma.
+* **Automated Anatomical Localization**: Detects lateralization (*Right vs Left Hemisphere vs Midline*) and longitudinal quadrant (*Frontal vs Parieto-Temporal vs Occipital*).
+* **Clinical HUD & Caliper Overlay**: Generates high-contrast measurement calipers with centroid crosshairs, bounding contours, and head-up display metrics directly on the MRI scan.
+
+---
+
 ## Clinical Diagnostic Workstation & Reporting
 
 The interactive dashboard (`app.py`) functions as a dedicated diagnostic workstation:
 
 * **Multi-Engine Switching**: Seamlessly toggle between `LightweightTumorCNN` (instant CPU binary screening) and `AdvancedTumorClassifier` (`EfficientNet-B4` 4-class subtype differentiation).
-* **Three-Panel Diagnostic View**: Displays Original Axial Scan, Skull-Stripped Tissue Crop, and Grad-CAM++ Saliency Overlay side-by-side.
+* **Three-Panel Visual Evidence View**: Displays Skull-Stripped Tissue Crop, Grad-CAM++ Saliency Heatmap, and Digital PACS Calipers side-by-side.
 * **Clinical Protocol Directives**: Automatic translation of model probabilities into clinical directives (urgent neuro-oncology referral, endocrine panel, or routine surveillance).
-* **Formal PDF & PNG Report Export**: One-click generation of 200 DPI clinical diagnostic summary sheets including Scan ID, acquisition metadata, confidence index, visual evidence panels, and legal regulatory disclaimers.
+* **Formal 4-Panel PDF & PNG Report Export**: One-click generation of 200 DPI clinical diagnostic summary sheets including Scan ID, acquisition metadata, confidence index, 4-panel visual evidence (Scan, Contour, Grad-CAM, Calipers), quantitative morphometry tables, and legal regulatory disclaimers.
 * **Patient Session Diagnostic Log**: Sidebar tracking of all evaluated scans within the current session with status badges (`POSITIVE` / `NEGATIVE`) and metadata.
 
 ---
