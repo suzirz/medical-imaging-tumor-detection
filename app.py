@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from PIL import Image
 import numpy as np
@@ -144,6 +145,15 @@ with tabs[2]:
                 tensor_in = torch.from_numpy(norm_img).permute(2, 0, 1).unsqueeze(0).float()
                 
                 net = LightweightTumorCNN(num_classes=2)
+                ckpt_path = "models_checkpoint/lightweight_best.pth"
+                if os.path.exists(ckpt_path):
+                    try:
+                        net.load_state_dict(torch.load(ckpt_path, map_location="cpu"))
+                        st.caption("✨ Memuat bobot model terlatih (`models_checkpoint/lightweight_best.pth` | Akurasi: 97.22%)")
+                    except Exception as e:
+                        st.warning(f"Gagal memuat checkpoint: {e}")
+                else:
+                    st.caption("ℹ️ Menggunakan inisialisasi bobot default.")
                 net.eval()
                 with torch.no_grad():
                     logits = net(tensor_in)
@@ -168,6 +178,13 @@ with tabs[2]:
                 tensor_in = torch.from_numpy(ch4)
 
                 net = BrainTumorCustomCNN(4, 4)
+                custom_ckpt = "models_checkpoint/custom_best.pth"
+                if os.path.exists(custom_ckpt):
+                    try:
+                        net.load_state_dict(torch.load(custom_ckpt, map_location="cpu"))
+                        st.caption("✨ Memuat bobot model terlatih (`models_checkpoint/custom_best.pth`)")
+                    except Exception:
+                        pass
                 net.eval()
                 with torch.no_grad():
                     probs = F.softmax(net(tensor_in), dim=1).numpy()[0]
