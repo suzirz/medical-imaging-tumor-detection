@@ -30,17 +30,26 @@ class LocalImageDataset(Dataset):
             return
 
         valid_exts = (".png", ".jpg", ".jpeg")
+        # Support both 2-class and 4-class folder variations
         if self.num_classes == 2:
-            class_map = {"no": 0, "normal": 0, "yes": 1, "tumor": 1}
+            class_map = {"no": 0, "normal": 0, "notumor": 0, "yes": 1, "tumor": 1, "glioma": 1, "meningioma": 1, "pituitary": 1}
         else:
-            class_map = {"normal": 0, "glioma": 1, "meningioma": 2, "pituitary": 3}
+            class_map = {"normal": 0, "notumor": 0, "no": 0, "glioma": 1, "meningioma": 2, "pituitary": 3}
 
-        for folder_name, class_id in class_map.items():
-            folder_path = os.path.join(self.root_dir, folder_name)
-            if os.path.isdir(folder_path):
-                for fname in os.listdir(folder_path):
-                    if fname.lower().endswith(valid_exts):
-                        self.samples.append((os.path.join(folder_path, fname), class_id))
+        # Check in root_dir directly, or look inside Training/ or Testing/ subfolders
+        search_dirs = [self.root_dir]
+        for sub in ("Training", "Testing", "train", "test"):
+            sub_path = os.path.join(self.root_dir, sub)
+            if os.path.isdir(sub_path):
+                search_dirs.append(sub_path)
+
+        for base in search_dirs:
+            for folder_name, class_id in class_map.items():
+                folder_path = os.path.join(base, folder_name)
+                if os.path.isdir(folder_path):
+                    for fname in os.listdir(folder_path):
+                        if fname.lower().endswith(valid_exts):
+                            self.samples.append((os.path.join(folder_path, fname), class_id))
 
     def __len__(self):
         return len(self.samples) if len(self.samples) > 0 else 64  # fallback synthetic count
@@ -70,18 +79,21 @@ class LocalImageDataset(Dataset):
         tensor_img = transforms.ToTensor()(cropped_pil)
         return tensor_img, label
 
-def train(architecture="lightweight", epochs=15, batch_size=16, lr=1e-3):
+def train(architecture="lightweight", epochs=15, batch_size=16, lr=1e-3, data_dir=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
     print(f"Architecture: {architecture.upper()} | Epochs: {epochs} | Batch Size: {batch_size}")
 
+    if data_dir is None:
+        data_dir = "Dataset" if os.path.exists("Dataset") else "data"
+    print(f"Using dataset from: {data_dir}")
+
     if architecture == "lightweight":
-        dataset = LocalImageDataset(root_dir="data", num_classes=2, image_size=(240, 240))
+        dataset = LocalImageDataset(root_dir=data_dir, num_classes=2, image_size=(240, 240))
         model = LightweightTumorCNN(num_classes=2).to(device)
         criterion = nn.BCEWithLogitsLoss()
     else:
-        dataset = LocalImageDataset(root_dir="data", num_classes=4, image_size=(240, 240))
-        # CustomCNN 3-channel input adaptation
+        dataset = LocalImageDataset(root_dir=data_dir, num_classes=4, image_size=(240, 240))
         model = BrainTumorCustomCNN(in_channels=3, num_classes=4).to(device)
         criterion = nn.CrossEntropyLoss()
 
@@ -152,5 +164,6 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--data_dir", type=str, default=None, help="Path ke folder dataset (default: auto-detect Dataset/ atau data/)")
     args = parser.parse_args()
-    train(architecture=args.arch, epochs=args.epochs, batch_size=args.batch_size, lr=args.lr)
+    train(architecture=args.arch, epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, data_dir=args.data_dir)
