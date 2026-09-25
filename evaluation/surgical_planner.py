@@ -1,7 +1,8 @@
 """
-Neurosurgical Resection Planner & Safe Corridor Simulator.
-Evaluates proximity of intracranial lesions to eloquent functional cortex
-(Motor Strip, Broca's Area, Wernicke's Area, Optic Radiations) and simulates safe craniotomy corridors.
+Neurosurgical Resection Planner & Safe Corridor Simulator (2D Heuristic Prototype).
+Calculates approximate Euclidean distances to 2D canonical functional landmarks
+on normalized slice coordinates. NOTE: This is a geometric proof-of-concept,
+NOT a stereotactic surgical neuronavigation system (no MNI registration or DTI tractography).
 """
 from typing import Dict, Any, List, Tuple
 import numpy as np
@@ -9,8 +10,8 @@ import cv2
 
 class NeurosurgicalPlanner:
     """
-    Surgical spatial guidance engine mapping lesion centroids against
-    cranial eloquent functional areas and calculating safe surgical access corridors.
+    Experimental 2D spatial guidance heuristic mapping lesion centroids against
+    canonical coordinates on a 256x256 normalized axial slice.
     """
 
     def __init__(self, mm_per_px: float = 0.47):

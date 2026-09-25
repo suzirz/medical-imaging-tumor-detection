@@ -51,11 +51,11 @@ tabs = st.tabs([
     "Clinical Diagnostic Workstation",
     "Deep Semantic Segmentation (Attention U-Net)",
     "Vision-Language Copilot & Interactive VQA",
-    "Case-Based Retrieval & Radiogenomics (CBMIR)",
-    "Virtual Contrast Synthesis (T1ce / FLAIR)",
-    "DeepSurv Patient Survival Prognostication",
-    "Native DICOM PACS & Window-Leveling",
-    "Neurosurgical Resection Planner",
+    "Case-Based Retrieval & Radiogenomics (CBMIR Prototype)",
+    "Virtual Contrast Synthesis (Heuristic Simulation)",
+    "Patient Survival Prognostication (Heuristic)",
+    "DICOM PACS Viewer & Window Presets",
+    "Neurosurgical Resection Planner (2D Heuristic)",
     "Contour Cropping & Skull Stripping",
     "Neural Architecture & Benchmark Registry"
 ])

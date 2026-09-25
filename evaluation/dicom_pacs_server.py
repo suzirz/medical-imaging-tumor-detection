@@ -1,9 +1,8 @@
 """
-Clinical DICOM PACS Network Node & 3D Multi-Planar Reconstruction (MPR) Engine.
-Implements:
-1. DICOM Network Node (C-ECHO verification, C-STORE ingestion, and DICOMweb QIDO/WADO queries)
-2. 3D Multi-Planar Reconstruction (MPR) slicing orthogonal planes: Axial (XY), Coronal (XZ), and Sagittal (YZ)
-   with synchronized crosshair coordinates.
+Clinical DICOM PACS Protocol Simulator & 3D Multi-Planar Reconstruction (MPR) Engine.
+NOTE: Network operations (C-ECHO, C-FIND, C-STORE) are simulated testbed methods
+for UI workflow prototyping, not a production pynetdicom socket daemon.
+The 3D MPR slicing operates locally on loaded image volumes.
 """
 import os
 import time
@@ -14,8 +13,7 @@ import cv2
 
 class DICOMPACSNode:
     """
-    Hospital PACS Network Node & DICOMweb Service Provider.
-    Simulates / integrates C-ECHO (Ping), C-STORE (Storage SCP), and WADO-RS retrieval.
+    Simulated PACS Network Node & Testbed for workflow demonstration.
     """
     def __init__(self, ae_title: str = "NEUROSCAN_PACS", port: int = 11112, storage_dir: str = "data/pacs_storage"):
         self.ae_title = ae_title
